@@ -31,17 +31,20 @@ export default function Checkout() {
 
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
 
+  const calcSubtotal = (price, quantity, addonFee) => price * quantity + (addonFee || 0)
+
   const addToCart = useCallback((product) => {
     setCart(prev => {
       const existing = prev.find(item => item.productId === product.id)
       if (existing) {
+        const newQty = existing.quantity + 1
         return prev.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
+            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee) }
             : item
         )
       }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, subtotal: product.price }]
+      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, subtotal: product.price }]
     })
   }, [])
 
@@ -104,7 +107,7 @@ export default function Checkout() {
       if (item.productId !== productId) return item
       const newQty = item.quantity + delta
       if (newQty <= 0) return null
-      return { ...item, quantity: newQty, subtotal: newQty * item.price }
+      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee) }
     }).filter(Boolean))
   }
 
@@ -112,12 +115,21 @@ export default function Checkout() {
     const n = parseInt(qty, 10)
     if (isNaN(n) || n < 1) return
     setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, quantity: n, subtotal: n * item.price } : item
+      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee) } : item
+    ))
+  }
+
+  const setAddonFee = (productId, fee) => {
+    const n = parseFloat(fee) || 0
+    if (n < 0) return
+    setCart(prev => prev.map(item =>
+      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n) } : item
     ))
   }
 
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
+  const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
 
   const handleCheckout = async () => {
     if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
@@ -240,6 +252,7 @@ export default function Checkout() {
                     <th className="px-5 py-2.5 text-left text-xs font-light tracking-widest text-neutral-400 uppercase">商品名稱</th>
                     <th className="px-4 py-2.5 text-right text-xs font-light tracking-widest text-neutral-400 uppercase">單價</th>
                     <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase">數量</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase">加購費用</th>
                     <th className="px-4 py-2.5 text-right text-xs font-light tracking-widest text-neutral-400 uppercase">小計</th>
                     <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase"></th>
                   </tr>
@@ -259,7 +272,26 @@ export default function Checkout() {
                             className="w-6 h-6 border border-neutral-300 flex items-center justify-center text-neutral-500 hover:bg-neutral-100 transition-colors text-xs">＋</button>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-light text-[#2d2d2d]">NT$ {Number(item.subtotal).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs text-neutral-400">NT$</span>
+                          <input
+                            type="number"
+                            value={item.addonFee || ''}
+                            onChange={e => setAddonFee(item.productId, e.target.value)}
+                            placeholder="0"
+                            min="0"
+                            step="1"
+                            className="w-20 text-center border border-neutral-300 py-0.5 text-sm focus:outline-none focus:border-brand-500 font-light placeholder-neutral-300"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-light text-[#2d2d2d]">
+                        NT$ {Number(item.subtotal).toLocaleString()}
+                        {item.addonFee > 0 && (
+                          <div className="text-xs text-brand-400 mt-0.5">含加購 +{Number(item.addonFee).toLocaleString()}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={() => removeFromCart(item.productId)}
                           className="text-neutral-300 hover:text-red-400 transition-colors">
@@ -291,6 +323,12 @@ export default function Checkout() {
               <span>商品總數</span>
               <span className="text-[#2d2d2d]">{cart.reduce((s, i) => s + i.quantity, 0)} 件</span>
             </div>
+            {totalAddon > 0 && (
+              <div className="flex justify-between">
+                <span>加購費用</span>
+                <span className="text-brand-500">NT$ {totalAddon.toLocaleString()}</span>
+              </div>
+            )}
           </div>
           <div className="border-t border-neutral-500/10 pt-4">
             <div className="flex justify-between items-baseline">

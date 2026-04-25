@@ -279,6 +279,7 @@ export default function Reports() {
                             <th className="px-4 py-2.5 text-left font-light tracking-widest text-neutral-400 uppercase">商品名稱</th>
                             <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">單價</th>
                             <th className="px-4 py-2.5 text-center font-light tracking-widest text-neutral-400 uppercase">數量</th>
+                            <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">加購費用</th>
                             <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">小計</th>
                           </tr>
                         </thead>
@@ -288,13 +289,16 @@ export default function Reports() {
                               <td className="px-4 py-2.5 font-light text-[#2d2d2d] tracking-wide">{item.name}</td>
                               <td className="px-4 py-2.5 text-right text-neutral-500 font-light">NT$ {Number(item.price).toLocaleString()}</td>
                               <td className="px-4 py-2.5 text-center text-neutral-500 font-light">{item.quantity}</td>
+                              <td className="px-4 py-2.5 text-right font-light text-neutral-500">
+                                {item.addonFee > 0 ? `NT$ ${Number(item.addonFee).toLocaleString()}` : '—'}
+                              </td>
                               <td className="px-4 py-2.5 text-right font-light text-[#2d2d2d]">NT$ {Number(item.subtotal).toLocaleString()}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr className="bg-brand-50">
-                            <td colSpan={3} className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-500 text-xs uppercase">合計</td>
+                            <td colSpan={4} className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-500 text-xs uppercase">合計</td>
                             <td className="px-4 py-2.5 text-right font-light text-brand-600">NT$ {Number(tx.total).toLocaleString()}</td>
                           </tr>
                         </tfoot>
