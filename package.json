@@ -25,23 +25,14 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        { "target": "portable", "arch": ["x64"] }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["zh_TW"],
-      "language": "1028"
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ],
       "category": "public.app-category.business"
-    },
-    "dmg": {
-      "title": "心藝花禮收銀系統"
     }
   },
   "dependencies": {
