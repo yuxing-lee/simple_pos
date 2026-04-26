@@ -12,6 +12,10 @@ export default function Checkout() {
   const [lastTransaction, setLastTransaction] = useState(null)
   const [error, setError] = useState('')
   const [isCheckingOut, setIsCheckingOut] = useState(false)
+  const [showCustomForm, setShowCustomForm] = useState(false)
+  const [customName, setCustomName] = useState('')
+  const [customPrice, setCustomPrice] = useState('')
+  const [customQty, setCustomQty] = useState('1')
 
   const barcodeRef = useRef(null)
   const barcodeBuffer = useRef('')
@@ -127,6 +131,22 @@ export default function Checkout() {
     ))
   }
 
+  const addCustomItem = () => {
+    const name = customName.trim()
+    const price = parseFloat(customPrice)
+    const qty = parseInt(customQty, 10)
+    if (!name) { showError('請輸入商品名稱'); return }
+    if (isNaN(price) || price < 0) { showError('請輸入有效的單價'); return }
+    if (isNaN(qty) || qty < 1) { showError('數量至少為 1'); return }
+    const customId = 'custom_' + Date.now()
+    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, subtotal: calcSubtotal(price, qty, 0) }])
+    setCustomName('')
+    setCustomPrice('')
+    setCustomQty('1')
+    setShowCustomForm(false)
+    barcodeRef.current?.focus()
+  }
+
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
@@ -220,6 +240,76 @@ export default function Checkout() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Custom item */}
+        <div className="bg-white border border-neutral-500/20 shadow-sm">
+          <button
+            onClick={() => setShowCustomForm(v => !v)}
+            className="w-full px-4 py-3 flex items-center justify-between text-xs tracking-widest uppercase text-neutral-400 hover:text-brand-600 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+              </svg>
+              自訂商品
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform duration-200 ${showCustomForm ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showCustomForm && (
+            <div className="px-4 pb-4 border-t border-neutral-500/10">
+              <div className="flex gap-3 mt-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-neutral-400 tracking-wider mb-1">商品名稱</label>
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={e => setCustomName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustomItem()}
+                    placeholder="輸入商品名稱"
+                    className="w-full border border-neutral-500/30 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all duration-300"
+                    autoFocus
+                  />
+                </div>
+                <div className="w-28">
+                  <label className="block text-xs text-neutral-400 tracking-wider mb-1">單價 (NT$)</label>
+                  <input
+                    type="number"
+                    value={customPrice}
+                    onChange={e => setCustomPrice(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustomItem()}
+                    placeholder="0"
+                    min="0"
+                    step="1"
+                    className="w-full border border-neutral-500/30 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all duration-300"
+                  />
+                </div>
+                <div className="w-20">
+                  <label className="block text-xs text-neutral-400 tracking-wider mb-1">數量</label>
+                  <input
+                    type="number"
+                    value={customQty}
+                    onChange={e => setCustomQty(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustomItem()}
+                    placeholder="1"
+                    min="1"
+                    step="1"
+                    className="w-full border border-neutral-500/30 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all duration-300"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={addCustomItem}
+                    className="px-4 py-2 bg-brand-600 text-white text-xs tracking-widest uppercase hover:bg-brand-700 transition-colors whitespace-nowrap"
+                  >
+                    加入
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cart */}
