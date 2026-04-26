@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from 'recharts'
 
 function getDateRange(filter) {
   const now = new Date()
@@ -27,6 +31,50 @@ function formatDateTime(isoString) {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   })
+}
+
+const localDateKey = (d) => {
+  const date = typeof d === 'string' ? new Date(d) : d
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+const PAYMENT_COLORS = ['#8d5f4d', '#b79483', '#c9b3a3', '#d4c4b0', '#e3dbd3']
+
+function PaymentTooltip({ active, payload, total }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  const pct = total > 0 ? ((d.amount / total) * 100).toFixed(1) : 0
+  return (
+    <div className="bg-white border border-neutral-500/20 shadow-sm px-3 py-2 text-xs">
+      <p className="text-[#2d2d2d] font-medium mb-1">{d.name}</p>
+      <p className="text-neutral-500">{d.count} 筆（{pct}%）</p>
+      <p className="text-brand-600">NT$ {d.amount.toLocaleString()}</p>
+    </div>
+  )
+}
+
+function DailyTooltip({ active, payload, label, filter }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="bg-white border border-neutral-500/20 shadow-sm px-3 py-2 text-xs">
+      <p className="text-neutral-500 mb-1">{filter === 'today' ? `${label}:00` : label}</p>
+      <p className="text-brand-600">NT$ {d.revenue.toLocaleString()}</p>
+      {d.count > 0 && <p className="text-neutral-400">{d.count} 筆</p>}
+    </div>
+  )
+}
+
+function ProductTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div className="bg-white border border-neutral-500/20 shadow-sm px-3 py-2 text-xs">
+      <p className="text-[#2d2d2d] font-medium mb-1">{d.name}</p>
+      <p className="text-neutral-500">{d.quantity} 件</p>
+      <p className="text-brand-600">NT$ {d.revenue.toLocaleString()}</p>
+    </div>
+  )
 }
 
 export default function Reports() {
@@ -100,6 +148,94 @@ export default function Reports() {
     }
   }
 
+  // --- Chart data ---
+
+  const paymentData = useMemo(() => {
+    const map = {}
+    activeTx.forEach(tx => {
+      const method = tx.paymentMethod || '未指定'
+      if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
+      map[method].count++
+      map[method].amount += tx.total
+    })
+    return Object.values(map).sort((a, b) => b.amount - a.amount)
+  }, [activeTx])
+
+  const dailyData = useMemo(() => {
+    if (activeTx.length === 0) return []
+
+    if (filter === 'today') {
+      const hours = Array.from({ length: 24 }, (_, i) => ({
+        label: String(i).padStart(2, '0'), revenue: 0, count: 0
+      }))
+      activeTx.forEach(tx => {
+        const h = new Date(tx.date).getHours()
+        hours[h].revenue += tx.total
+        hours[h].count++
+      })
+      const nonZeroIdx = hours.reduce((acc, h, i) => h.revenue > 0 ? [...acc, i] : acc, [])
+      if (nonZeroIdx.length === 0) return []
+      return hours.slice(Math.max(0, nonZeroIdx[0] - 1), Math.min(23, nonZeroIdx[nonZeroIdx.length - 1] + 1) + 1)
+    }
+
+    if (filter === 'week') {
+      const now = new Date()
+      const diffToMon = now.getDay() === 0 ? 6 : now.getDay() - 1
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now)
+        d.setDate(now.getDate() - diffToMon + i)
+        return { key: localDateKey(d), label: ['一', '二', '三', '四', '五', '六', '日'][i], revenue: 0, count: 0 }
+      })
+      activeTx.forEach(tx => {
+        const key = localDateKey(tx.date)
+        const day = days.find(d => d.key === key)
+        if (day) { day.revenue += tx.total; day.count++ }
+      })
+      return days
+    }
+
+    if (filter === 'month') {
+      const now = new Date()
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+      const days = Array.from({ length: daysInMonth }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth(), i + 1)
+        return { key: localDateKey(d), label: String(i + 1), revenue: 0, count: 0 }
+      })
+      activeTx.forEach(tx => {
+        const key = localDateKey(tx.date)
+        const day = days.find(d => d.key === key)
+        if (day) { day.revenue += tx.total; day.count++ }
+      })
+      return days
+    }
+
+    // custom: only days with transactions, capped at 62 days
+    const map = {}
+    activeTx.forEach(tx => {
+      const key = localDateKey(tx.date)
+      if (!map[key]) map[key] = { key, label: key.slice(5).replace('-', '/'), revenue: 0, count: 0 }
+      map[key].revenue += tx.total
+      map[key].count++
+    })
+    const result = Object.values(map).sort((a, b) => a.key.localeCompare(b.key))
+    return result.length <= 62 ? result : []
+  }, [activeTx, filter])
+
+  const topProducts = useMemo(() => {
+    const map = {}
+    activeTx.forEach(tx => {
+      tx.items.forEach(item => {
+        if (!map[item.name]) map[item.name] = { name: item.name, quantity: 0, revenue: 0 }
+        map[item.name].quantity += item.quantity
+        map[item.name].revenue += item.subtotal
+      })
+    })
+    return Object.values(map).sort((a, b) => b.quantity - a.quantity).slice(0, 5)
+  }, [activeTx])
+
+  const showCharts = !loading && activeTx.length > 0
+  const showTopProducts = filter !== 'today' && topProducts.length > 0
+
   const FILTER_BUTTONS = [
     { id: 'today', label: '日報' },
     { id: 'week', label: '週報' },
@@ -159,19 +295,16 @@ export default function Reports() {
             label: '有效交易筆數',
             value: activeTx.length.toLocaleString(),
             unit: `筆（已取消 ${filteredTransactions.length - activeTx.length} 筆）`,
-            color: 'bg-brand-50 text-brand-600'
           },
           {
             label: '總營業額',
             value: `NT$ ${totalRevenue.toLocaleString()}`,
             unit: '元（不含已取消）',
-            color: 'bg-neutral-100 text-neutral-600'
           },
           {
             label: '銷售商品數',
             value: totalItems.toLocaleString(),
             unit: '件（不含已取消）',
-            color: 'bg-brand-50 text-brand-400'
           }
         ].map(card => (
           <div key={card.label} className="bg-white border border-neutral-500/20 shadow-sm p-5">
@@ -181,6 +314,127 @@ export default function Reports() {
           </div>
         ))}
       </div>
+
+      {/* Charts */}
+      {showCharts && (
+        <div className="mb-5 space-y-4">
+          {/* Row: payment pie + time bar */}
+          <div className="flex gap-4">
+            {/* Payment pie */}
+            <div className="w-72 flex-shrink-0 bg-white border border-neutral-500/20 shadow-sm p-5">
+              <p className="text-xs tracking-widest uppercase text-neutral-400 mb-1">付款方式分佈</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie
+                    data={paymentData}
+                    cx="50%" cy="50%"
+                    innerRadius={52} outerRadius={80}
+                    dataKey="amount" nameKey="name"
+                    paddingAngle={2}
+                  >
+                    {paymentData.map((_, i) => (
+                      <Cell key={i} fill={PAYMENT_COLORS[i % PAYMENT_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={(props) => <PaymentTooltip {...props} total={totalRevenue} />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-3 space-y-2">
+                {paymentData.map((entry, i) => (
+                  <div key={entry.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: PAYMENT_COLORS[i % PAYMENT_COLORS.length] }} />
+                      <span className="text-neutral-600 tracking-wide">{entry.name}</span>
+                    </div>
+                    <div className="text-right text-neutral-400 tracking-wide">
+                      {entry.count} 筆
+                      <span className="mx-1 text-neutral-300">·</span>
+                      <span className="text-brand-600">NT$ {entry.amount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Daily / hourly bar chart */}
+            {dailyData.length > 0 && (
+              <div className="flex-1 bg-white border border-neutral-500/20 shadow-sm p-5 flex flex-col">
+                <p className="text-xs tracking-widest uppercase text-neutral-400 mb-4">
+                  {filter === 'today' ? '每小時營業額' :
+                   filter === 'week' ? '本週每日營業額' :
+                   filter === 'month' ? '本月每日營業額' : '每日營業額'}
+                </p>
+                <div className="flex-1" style={{ minHeight: 180 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={dailyData}
+                      margin={{ top: 4, right: 4, bottom: 0, left: -10 }}
+                      barCategoryGap="35%"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ede8e3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: '#c5b9a8' }}
+                        axisLine={false} tickLine={false}
+                        interval={filter === 'month' ? 4 : 0}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#c5b9a8' }}
+                        axisLine={false} tickLine={false}
+                        width={38}
+                        tickFormatter={v => v >= 1000 ? `${Math.round(v / 1000)}k` : v === 0 ? '0' : String(v)}
+                      />
+                      <Tooltip
+                        content={(props) => <DailyTooltip {...props} filter={filter} />}
+                        cursor={{ fill: '#f8f5f3' }}
+                      />
+                      <Bar dataKey="revenue" fill="#8d5f4d" radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Top products */}
+          {showTopProducts && (
+            <div className="bg-white border border-neutral-500/20 shadow-sm p-5">
+              <p className="text-xs tracking-widest uppercase text-neutral-400 mb-4">熱銷商品 Top 5</p>
+              <ResponsiveContainer width="100%" height={topProducts.length * 40 + 10}>
+                <BarChart
+                  data={topProducts}
+                  layout="vertical"
+                  margin={{ top: 0, right: 56, bottom: 0, left: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ede8e3" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 10, fill: '#c5b9a8' }}
+                    axisLine={false} tickLine={false}
+                    allowDecimals={false}
+                    tickFormatter={v => Number.isInteger(v) ? v : ''}
+                  />
+                  <YAxis
+                    type="category" dataKey="name"
+                    width={130}
+                    tick={{ fontSize: 11, fill: '#73493b' }}
+                    axisLine={false} tickLine={false}
+                  />
+                  <Tooltip content={<ProductTooltip />} cursor={{ fill: '#f8f5f3' }} />
+                  <Bar
+                    dataKey="quantity"
+                    fill="#b79483"
+                    radius={[0, 3, 3, 0]}
+                    barSize={18}
+                    label={{ position: 'right', fontSize: 10, fill: '#a89778', formatter: v => `${v} 件` }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Transaction list */}
       <div className="bg-white border border-neutral-500/20 shadow-sm overflow-hidden">
@@ -232,6 +486,9 @@ export default function Reports() {
                       <p className={`text-sm font-light tracking-wide ${tx.cancelled ? 'text-neutral-400 line-through' : 'text-brand-600'}`}>
                         NT$ {Number(tx.total).toLocaleString()}
                       </p>
+                      {tx.paymentMethod && (
+                        <p className="text-xs text-neutral-400 mt-0.5 tracking-wide">{tx.paymentMethod}</p>
+                      )}
                     </div>
 
                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -304,7 +561,12 @@ export default function Reports() {
                         </tfoot>
                       </table>
                     </div>
-                    <p className="text-xs text-neutral-400 mt-2 text-right tracking-wide">{formatDateTime(tx.date)}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      {tx.paymentMethod ? (
+                        <span className="text-xs text-neutral-500 tracking-wide">付款方式：{tx.paymentMethod}</span>
+                      ) : <span />}
+                      <p className="text-xs text-neutral-400 tracking-wide">{formatDateTime(tx.date)}</p>
+                    </div>
                   </div>
                 )}
               </div>

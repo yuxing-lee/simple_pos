@@ -25,12 +25,23 @@
     ],
     "win": {
       "target": [
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "mac": {
       "target": [
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.business"
     }
@@ -39,6 +50,7 @@
     "@supabase/supabase-js": "^2.104.1",
     "jsbarcode": "^3.11.6",
     "qrcode": "^1.5.4",
+    "recharts": "^3.8.1",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
