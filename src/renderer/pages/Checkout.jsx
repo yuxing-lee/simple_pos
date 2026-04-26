@@ -16,6 +16,9 @@ export default function Checkout() {
   const [customName, setCustomName] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty] = useState('1')
+  const [paymentMethod, setPaymentMethod] = useState('現金')
+
+  const PAYMENT_METHODS = ['現金', 'Linepay', '街口支付', '銀行轉帳']
 
   const barcodeRef = useRef(null)
   const barcodeBuffer = useRef('')
@@ -155,7 +158,7 @@ export default function Checkout() {
     if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
     setIsCheckingOut(true)
     try {
-      const transaction = { id: String(Date.now()), date: new Date().toISOString(), items: cart, total }
+      const transaction = { id: String(Date.now()), date: new Date().toISOString(), items: cart, total, paymentMethod }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
@@ -191,7 +194,7 @@ export default function Checkout() {
               </svg>
               結帳完成
             </div>
-            <p className="text-xs text-brand-500 tracking-wide">NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品</p>
+            <p className="text-xs text-brand-500 tracking-wide">NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}</p>
           </div>
         )}
 
@@ -425,6 +428,26 @@ export default function Checkout() {
               <span className="text-xs tracking-widest uppercase text-neutral-400">總金額</span>
               <span className="text-xl font-light text-brand-600">NT$ {total.toLocaleString()}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Payment method */}
+        <div className="bg-white border border-neutral-500/20 shadow-sm p-4">
+          <p className="text-xs tracking-widest uppercase text-neutral-400 mb-3">付款方式</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {PAYMENT_METHODS.map(method => (
+              <button
+                key={method}
+                onClick={() => setPaymentMethod(method)}
+                className={`py-2 text-xs tracking-wide transition-all duration-200 ${
+                  paymentMethod === method
+                    ? 'bg-brand-600 text-white'
+                    : 'border border-neutral-300 text-neutral-500 hover:border-brand-400 hover:text-brand-600'
+                }`}
+              >
+                {method}
+              </button>
+            ))}
           </div>
         </div>
 
