@@ -125,9 +125,10 @@ export default function ProductManagement() {
 
     setSaving(true)
     const id = String(Date.now())
+    const now = new Date().toISOString()
     const { data: newProduct, error: err } = await supabase
       .from('Product')
-      .insert({ id, name: trimmedName, price: parsedPrice, barcode: id, image: '', description: '', visible: true, featured: false, sortOrder: 0 })
+      .insert({ id, name: trimmedName, price: parsedPrice, barcode: id, image: '', description: '', visible: true, featured: false, sortOrder: 0, createdAt: now, updatedAt: now })
       .select('id, name, price, barcode, image, visible')
       .single()
 
