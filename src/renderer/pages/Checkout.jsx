@@ -185,6 +185,7 @@ export default function Checkout() {
   }
 
   return (
+    <>
     <div className="max-w-7xl mx-auto flex gap-5 h-full">
       {/* Left: input + cart */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
@@ -579,5 +580,6 @@ export default function Checkout() {
         </div>
       </div>
     )}
+    </>
   )
 }
