@@ -17,6 +17,8 @@ export default function Checkout() {
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty] = useState('1')
   const [paymentMethod, setPaymentMethod] = useState('現金')
+  const [showCashModal, setShowCashModal] = useState(false)
+  const [cashReceived, setCashReceived] = useState('')
 
   const PAYMENT_METHODS = ['現金', 'Linepay', '街口支付', '銀行轉帳']
 
@@ -154,11 +156,21 @@ export default function Checkout() {
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
+    if (paymentMethod === '現金') {
+      setCashReceived('')
+      setShowCashModal(true)
+    } else {
+      confirmCheckout(null)
+    }
+  }
+
+  const confirmCheckout = async (cashPaid) => {
+    setShowCashModal(false)
     setIsCheckingOut(true)
     try {
-      const transaction = { id: String(Date.now()), date: new Date().toISOString(), items: cart, total, paymentMethod }
+      const transaction = { id: String(Date.now()), date: new Date().toISOString(), items: cart, total, paymentMethod, cashPaid: cashPaid ?? undefined, change: cashPaid != null ? cashPaid - total : undefined }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
@@ -173,6 +185,7 @@ export default function Checkout() {
   }
 
   return (
+    <>
     <div className="max-w-7xl mx-auto flex gap-5 h-full">
       {/* Left: input + cart */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
@@ -194,7 +207,10 @@ export default function Checkout() {
               </svg>
               結帳完成
             </div>
-            <p className="text-xs text-brand-500 tracking-wide">NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}</p>
+            <p className="text-xs text-brand-500 tracking-wide">
+              NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}
+              {lastTransaction.change != null && <span className="ml-1">· 找零 NT$ {lastTransaction.change.toLocaleString()}</span>}
+            </p>
           </div>
         )}
 
@@ -492,5 +508,78 @@ export default function Checkout() {
         </div>
       </div>
     </div>
+
+    {/* Cash payment modal */}
+    {showCashModal && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowCashModal(false)}>
+        <div className="bg-white shadow-xl w-80 p-6" onClick={e => e.stopPropagation()}>
+          <p className="text-xs tracking-widest uppercase text-neutral-400 mb-5">現金付款</p>
+
+          <div className="flex justify-between items-baseline mb-5">
+            <span className="text-xs tracking-wider text-neutral-400">應收金額</span>
+            <span className="text-2xl font-light text-brand-600">NT$ {total.toLocaleString()}</span>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-xs tracking-wider text-neutral-400 mb-1.5">客人付款金額 (NT$)</label>
+            <input
+              type="number"
+              value={cashReceived}
+              onChange={e => setCashReceived(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const paid = parseFloat(cashReceived)
+                  if (!isNaN(paid) && paid >= total) confirmCheckout(paid)
+                }
+                if (e.key === 'Escape') setShowCashModal(false)
+              }}
+              placeholder="輸入金額"
+              min={total}
+              step="1"
+              autoFocus
+              className="w-full border border-neutral-500/30 px-4 py-3 text-lg font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all duration-300"
+            />
+          </div>
+
+          {cashReceived !== '' && (() => {
+            const paid = parseFloat(cashReceived)
+            if (isNaN(paid)) return null
+            if (paid < total) {
+              return (
+                <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 text-red-500 text-xs tracking-wide">
+                  付款金額不足，差 NT$ {(total - paid).toLocaleString()}
+                </div>
+              )
+            }
+            return (
+              <div className="mb-4 flex justify-between items-baseline px-3 py-2.5 bg-brand-50 border border-brand-200">
+                <span className="text-xs tracking-wider text-brand-500">找零</span>
+                <span className="text-xl font-light text-brand-600">NT$ {(paid - total).toLocaleString()}</span>
+              </div>
+            )
+          })()}
+
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => setShowCashModal(false)}
+              className="flex-1 py-2.5 border border-neutral-300 text-xs tracking-widest uppercase text-neutral-500 hover:bg-neutral-50 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => {
+                const paid = parseFloat(cashReceived)
+                if (!isNaN(paid) && paid >= total) confirmCheckout(paid)
+              }}
+              disabled={(() => { const p = parseFloat(cashReceived); return isNaN(p) || p < total })()}
+              className="flex-1 py-2.5 bg-brand-600 text-white text-xs tracking-widest uppercase hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              確認完成
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
