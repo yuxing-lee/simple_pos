@@ -16,8 +16,7 @@ export default function Checkout() {
   const [customName, setCustomName] = useState('')
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty] = useState('1')
-  const [paymentMethod, setPaymentMethod] = useState('現金')
-  const [showCashModal, setShowCashModal] = useState(false)
+  const [payments, setPayments] = useState({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
   const [cashReceived, setCashReceived] = useState('')
 
   const PAYMENT_METHODS = ['現金', 'Linepay', '街口支付', '銀行轉帳']
@@ -156,24 +155,48 @@ export default function Checkout() {
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
 
-  const handleCheckout = () => {
-    if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
-    if (paymentMethod === '現金') {
-      setCashReceived('')
-      setShowCashModal(true)
-    } else {
-      confirmCheckout(null)
-    }
+  const totalPaid = PAYMENT_METHODS.reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
+  const remaining = total - totalPaid
+  const cashAmount = parseFloat(payments['現金']) || 0
+  const cashReceivedAmt = parseFloat(cashReceived) || 0
+  const cashChange = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt - cashAmount : null
+
+  const handleMethodFill = (method) => {
+    const othersTotal = PAYMENT_METHODS
+      .filter(m => m !== method)
+      .reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
+    const fillAmt = Math.max(0, total - othersTotal)
+    if (fillAmt > 0) setPayments(prev => ({ ...prev, [method]: String(fillAmt) }))
   }
 
-  const confirmCheckout = async (cashPaid) => {
-    setShowCashModal(false)
+  const handleCheckout = () => {
+    if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
+    if (Math.round(remaining) !== 0) { showError('付款金額合計須等於應付總額'); return }
+    if (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashAmount) { showError('現金收款金額不足'); return }
+    confirmCheckout()
+  }
+
+  const confirmCheckout = async () => {
     setIsCheckingOut(true)
     try {
-      const transaction = { id: String(Date.now()), date: new Date().toISOString(), items: cart, total, paymentMethod, cashPaid: cashPaid ?? undefined, change: cashPaid != null ? cashPaid - total : undefined }
+      const activePayments = PAYMENT_METHODS
+        .filter(m => (parseFloat(payments[m]) || 0) > 0)
+        .map(m => ({ method: m, amount: parseFloat(payments[m]) }))
+      const paymentMethodLabel = activePayments.length === 0 ? '未指定'
+        : activePayments.length === 1 ? activePayments[0].method
+        : activePayments.map(p => p.method).join(' + ')
+      const cashRecv = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt : undefined
+      const cashChg = cashRecv != null ? cashRecv - cashAmount : undefined
+      const transaction = {
+        id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
+        payments: activePayments, paymentMethod: paymentMethodLabel,
+        cashReceived: cashRecv, cashChange: cashChg,
+      }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
+      setPayments({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
+      setCashReceived('')
       setCheckoutSuccess(true)
       setTimeout(() => setCheckoutSuccess(false), 5000)
       barcodeRef.current?.focus()
@@ -209,7 +232,7 @@ export default function Checkout() {
             </div>
             <p className="text-xs text-brand-500 tracking-wide">
               NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}
-              {lastTransaction.change != null && <span className="ml-1">· 找零 NT$ {lastTransaction.change.toLocaleString()}</span>}
+              {lastTransaction.cashChange != null && lastTransaction.cashChange > 0 && <span className="ml-1">· 找零 NT$ {lastTransaction.cashChange.toLocaleString()}</span>}
             </p>
           </div>
         )}
@@ -450,27 +473,68 @@ export default function Checkout() {
         {/* Payment method */}
         <div className="bg-white border border-neutral-500/20 shadow-sm p-4">
           <p className="text-xs tracking-widest uppercase text-neutral-400 mb-3">付款方式</p>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="space-y-2">
             {PAYMENT_METHODS.map(method => (
-              <button
-                key={method}
-                onClick={() => setPaymentMethod(method)}
-                className={`py-2 text-xs tracking-wide transition-all duration-200 ${
-                  paymentMethod === method
-                    ? 'bg-brand-600 text-white'
-                    : 'border border-neutral-300 text-neutral-500 hover:border-brand-400 hover:text-brand-600'
-                }`}
-              >
-                {method}
-              </button>
+              <div key={method} className="flex items-center gap-2">
+                <button
+                  onClick={() => handleMethodFill(method)}
+                  title="點擊填入剩餘金額"
+                  className="w-16 flex-shrink-0 text-xs tracking-wide text-left text-neutral-600 hover:text-brand-600 transition-colors truncate"
+                >
+                  {method}
+                </button>
+                <div className="flex items-center gap-1 flex-1">
+                  <span className="text-xs text-neutral-400 flex-shrink-0">NT$</span>
+                  <input
+                    type="number"
+                    value={payments[method]}
+                    onChange={e => setPayments(prev => ({ ...prev, [method]: e.target.value }))}
+                    placeholder="0"
+                    min="0"
+                    step="1"
+                    className="w-full border border-neutral-300 px-2 py-1.5 text-xs font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-right"
+                  />
+                </div>
+              </div>
             ))}
           </div>
+
+          <div className="mt-3 pt-2 border-t border-neutral-500/10 flex justify-between items-center text-xs tracking-wide">
+            {Math.abs(remaining) < 0.5 ? (
+              <span className="text-brand-600">已付清</span>
+            ) : remaining > 0 ? (
+              <><span className="text-neutral-500">未付金額</span><span className="text-red-500">NT$ {Math.round(remaining).toLocaleString()}</span></>
+            ) : (
+              <><span className="text-neutral-500">超付</span><span className="text-orange-500">NT$ {Math.abs(Math.round(remaining)).toLocaleString()}</span></>
+            )}
+          </div>
+
+          {cashAmount > 0 && (
+            <div className="mt-3 pt-3 border-t border-neutral-500/10">
+              <label className="block text-xs text-neutral-400 tracking-wider mb-1.5">客付現金 (NT$)</label>
+              <input
+                type="number"
+                value={cashReceived}
+                onChange={e => setCashReceived(e.target.value)}
+                placeholder={String(cashAmount)}
+                min="0"
+                step="1"
+                className="w-full border border-neutral-300 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              {cashReceived !== '' && (
+                <div className={`mt-2 flex justify-between text-xs tracking-wide ${cashChange != null && cashChange < 0 ? 'text-red-500' : 'text-brand-600'}`}>
+                  <span>{cashChange != null && cashChange < 0 ? '現金不足' : '找零'}</span>
+                  <span>NT$ {cashChange != null ? Math.abs(cashChange).toLocaleString() : '0'}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Checkout button */}
         <button
           onClick={handleCheckout}
-          disabled={cart.length === 0 || isCheckingOut}
+          disabled={cart.length === 0 || isCheckingOut || Math.round(remaining) !== 0 || (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashAmount)}
           className="w-full py-4 bg-brand-600 text-white text-xs tracking-widest uppercase font-light hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 shadow-sm"
         >
           {isCheckingOut ? (
@@ -509,77 +573,6 @@ export default function Checkout() {
       </div>
     </div>
 
-    {/* Cash payment modal */}
-    {showCashModal && (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowCashModal(false)}>
-        <div className="bg-white shadow-xl w-80 p-6" onClick={e => e.stopPropagation()}>
-          <p className="text-xs tracking-widest uppercase text-neutral-400 mb-5">現金付款</p>
-
-          <div className="flex justify-between items-baseline mb-5">
-            <span className="text-xs tracking-wider text-neutral-400">應收金額</span>
-            <span className="text-2xl font-light text-brand-600">NT$ {total.toLocaleString()}</span>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-xs tracking-wider text-neutral-400 mb-1.5">客人付款金額 (NT$)</label>
-            <input
-              type="number"
-              value={cashReceived}
-              onChange={e => setCashReceived(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const paid = parseFloat(cashReceived)
-                  if (!isNaN(paid) && paid >= total) confirmCheckout(paid)
-                }
-                if (e.key === 'Escape') setShowCashModal(false)
-              }}
-              placeholder="輸入金額"
-              min={total}
-              step="1"
-              autoFocus
-              className="w-full border border-neutral-500/30 px-4 py-3 text-lg font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all duration-300"
-            />
-          </div>
-
-          {cashReceived !== '' && (() => {
-            const paid = parseFloat(cashReceived)
-            if (isNaN(paid)) return null
-            if (paid < total) {
-              return (
-                <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 text-red-500 text-xs tracking-wide">
-                  付款金額不足，差 NT$ {(total - paid).toLocaleString()}
-                </div>
-              )
-            }
-            return (
-              <div className="mb-4 flex justify-between items-baseline px-3 py-2.5 bg-brand-50 border border-brand-200">
-                <span className="text-xs tracking-wider text-brand-500">找零</span>
-                <span className="text-xl font-light text-brand-600">NT$ {(paid - total).toLocaleString()}</span>
-              </div>
-            )
-          })()}
-
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={() => setShowCashModal(false)}
-              className="flex-1 py-2.5 border border-neutral-300 text-xs tracking-widest uppercase text-neutral-500 hover:bg-neutral-50 transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={() => {
-                const paid = parseFloat(cashReceived)
-                if (!isNaN(paid) && paid >= total) confirmCheckout(paid)
-              }}
-              disabled={(() => { const p = parseFloat(cashReceived); return isNaN(p) || p < total })()}
-              className="flex-1 py-2.5 bg-brand-600 text-white text-xs tracking-widest uppercase hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              確認完成
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     </>
   )
 }

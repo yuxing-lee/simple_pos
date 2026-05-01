@@ -153,10 +153,19 @@ export default function Reports() {
   const paymentData = useMemo(() => {
     const map = {}
     activeTx.forEach(tx => {
-      const method = tx.paymentMethod || '未指定'
-      if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
-      map[method].count++
-      map[method].amount += tx.total
+      if (Array.isArray(tx.payments) && tx.payments.length > 0) {
+        tx.payments.forEach(p => {
+          const method = p.method || '未指定'
+          if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
+          map[method].count++
+          map[method].amount += p.amount
+        })
+      } else {
+        const method = tx.paymentMethod || '未指定'
+        if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
+        map[method].count++
+        map[method].amount += tx.total
+      }
     })
     return Object.values(map).sort((a, b) => b.amount - a.amount)
   }, [activeTx])
@@ -486,9 +495,11 @@ export default function Reports() {
                       <p className={`text-sm font-light tracking-wide ${tx.cancelled ? 'text-neutral-400 line-through' : 'text-brand-600'}`}>
                         NT$ {Number(tx.total).toLocaleString()}
                       </p>
-                      {tx.paymentMethod && (
-                        <p className="text-xs text-neutral-400 mt-0.5 tracking-wide">{tx.paymentMethod}</p>
-                      )}
+                      <p className="text-xs text-neutral-400 mt-0.5 tracking-wide">
+                        {Array.isArray(tx.payments) && tx.payments.length > 0
+                          ? tx.payments.map(p => p.method).join(' + ')
+                          : tx.paymentMethod || ''}
+                      </p>
                     </div>
 
                     <svg xmlns="http://www.w3.org/2000/svg"
@@ -561,11 +572,25 @@ export default function Reports() {
                         </tfoot>
                       </table>
                     </div>
-                    <div className="flex items-center justify-between mt-2">
-                      {tx.paymentMethod ? (
-                        <span className="text-xs text-neutral-500 tracking-wide">付款方式：{tx.paymentMethod}</span>
-                      ) : <span />}
-                      <p className="text-xs text-neutral-400 tracking-wide">{formatDateTime(tx.date)}</p>
+                    <div className="flex items-start justify-between mt-2">
+                      <div className="text-xs text-neutral-500 tracking-wide space-y-0.5">
+                        {Array.isArray(tx.payments) && tx.payments.length > 0 ? (
+                          tx.payments.map((p, i) => (
+                            <div key={i}>{p.method}：NT$ {Number(p.amount).toLocaleString()}</div>
+                          ))
+                        ) : tx.paymentMethod ? (
+                          <div>付款方式：{tx.paymentMethod}</div>
+                        ) : null}
+                        {tx.cashChange != null && tx.cashChange > 0 ? (
+                          <div className="text-brand-500">
+                            找零：NT$ {Number(tx.cashChange).toLocaleString()}
+                            {tx.cashReceived != null && <span className="text-neutral-400">（客付 NT$ {Number(tx.cashReceived).toLocaleString()}）</span>}
+                          </div>
+                        ) : tx.change != null && tx.change > 0 ? (
+                          <div className="text-brand-500">找零：NT$ {Number(tx.change).toLocaleString()}</div>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-neutral-400 tracking-wide flex-shrink-0 ml-4">{formatDateTime(tx.date)}</p>
                     </div>
                   </div>
                 )}
