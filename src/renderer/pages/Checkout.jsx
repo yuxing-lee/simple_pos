@@ -39,7 +39,7 @@ export default function Checkout() {
 
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
 
-  const calcSubtotal = (price, quantity, addonFee) => price * quantity + (addonFee || 0)
+  const calcSubtotal = (price, quantity, addonFee, discount = 10) => price * (discount / 10) * quantity + (addonFee || 0)
 
   const addToCart = useCallback((product) => {
     setCart(prev => {
@@ -48,11 +48,11 @@ export default function Checkout() {
         const newQty = existing.quantity + 1
         return prev.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee) }
+            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discount ?? 10) }
             : item
         )
       }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, subtotal: product.price }]
+      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, discount: 10, subtotal: product.price }]
     })
   }, [])
 
@@ -115,7 +115,7 @@ export default function Checkout() {
       if (item.productId !== productId) return item
       const newQty = item.quantity + delta
       if (newQty <= 0) return null
-      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee) }
+      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discount ?? 10) }
     }).filter(Boolean))
   }
 
@@ -123,7 +123,7 @@ export default function Checkout() {
     const n = parseInt(qty, 10)
     if (isNaN(n) || n < 1) return
     setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee) } : item
+      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee, item.discount ?? 10) } : item
     ))
   }
 
@@ -131,7 +131,17 @@ export default function Checkout() {
     const n = parseFloat(fee) || 0
     if (n < 0) return
     setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n) } : item
+      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discount ?? 10) } : item
+    ))
+  }
+
+  const setDiscount = (productId, val) => {
+    const n = val === '' ? 10 : parseFloat(val)
+    if (isNaN(n) || n < 0 || n > 10) return
+    setCart(prev => prev.map(item =>
+      item.productId === productId
+        ? { ...item, discount: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, n) }
+        : item
     ))
   }
 
@@ -143,7 +153,7 @@ export default function Checkout() {
     if (isNaN(price) || price < 0) { showError('請輸入有效的單價'); return }
     if (isNaN(qty) || qty < 1) { showError('數量至少為 1'); return }
     const customId = 'custom_' + Date.now()
-    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, subtotal: calcSubtotal(price, qty, 0) }])
+    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, discount: 10, subtotal: calcSubtotal(price, qty, 0, 10) }])
     setCustomName('')
     setCustomPrice('')
     setCustomQty('1')
@@ -154,6 +164,10 @@ export default function Checkout() {
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
+  const totalDiscount = cart.reduce((sum, item) => {
+    const d = item.discount ?? 10
+    return sum + item.price * item.quantity * (1 - d / 10)
+  }, 0)
 
   const totalPaid = PAYMENT_METHODS.reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
   const remaining = total - totalPaid
@@ -383,6 +397,7 @@ export default function Checkout() {
                   <tr>
                     <th className="px-5 py-2.5 text-left text-xs font-light tracking-widest text-neutral-400 uppercase">商品名稱</th>
                     <th className="px-4 py-2.5 text-right text-xs font-light tracking-widest text-neutral-400 uppercase">單價</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase">折扣</th>
                     <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase">數量</th>
                     <th className="px-4 py-2.5 text-center text-xs font-light tracking-widest text-neutral-400 uppercase">加購費用</th>
                     <th className="px-4 py-2.5 text-right text-xs font-light tracking-widest text-neutral-400 uppercase">小計</th>
@@ -394,6 +409,21 @@ export default function Checkout() {
                     <tr key={item.productId} className="hover:bg-brand-50/30 transition-colors">
                       <td className="px-5 py-3 font-light text-[#2d2d2d] tracking-wide">{item.name}</td>
                       <td className="px-4 py-3 text-right text-neutral-500 font-light">NT$ {Number(item.price).toLocaleString()}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            value={(item.discount ?? 10) < 10 ? (item.discount ?? 10) : ''}
+                            onChange={e => setDiscount(item.productId, e.target.value)}
+                            placeholder="10"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            className="w-14 text-center border border-neutral-300 py-0.5 text-sm focus:outline-none focus:border-brand-500 font-light placeholder-neutral-300"
+                          />
+                          <span className="text-xs text-neutral-400">折</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button onClick={() => updateQuantity(item.productId, -1)}
@@ -420,6 +450,11 @@ export default function Checkout() {
                       </td>
                       <td className="px-4 py-3 text-right font-light text-[#2d2d2d]">
                         NT$ {Number(item.subtotal).toLocaleString()}
+                        {(item.discount ?? 10) < 10 && (
+                          <div className="text-xs text-orange-400 mt-0.5">
+                            打{item.discount}折 −NT$ {Math.round(item.price * item.quantity * (1 - item.discount / 10)).toLocaleString()}
+                          </div>
+                        )}
                         {item.addonFee > 0 && (
                           <div className="text-xs text-brand-400 mt-0.5">含加購 +{Number(item.addonFee).toLocaleString()}</div>
                         )}
@@ -455,6 +490,12 @@ export default function Checkout() {
               <span>商品總數</span>
               <span className="text-[#2d2d2d]">{cart.reduce((s, i) => s + i.quantity, 0)} 件</span>
             </div>
+            {totalDiscount > 0 && (
+              <div className="flex justify-between">
+                <span>折扣優惠</span>
+                <span className="text-orange-500">−NT$ {Math.round(totalDiscount).toLocaleString()}</span>
+              </div>
+            )}
             {totalAddon > 0 && (
               <div className="flex justify-between">
                 <span>加購費用</span>
