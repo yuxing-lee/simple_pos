@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
+import {
+  PAYMENT_METHODS,
+  calcSubtotal,
+  calcCartTotal,
+  calcCartDiscount,
+  calcTotalPaid,
+  calcRemaining,
+  calcCashDue,
+  calcCashChange,
+  validatePayment,
+} from '../utils/paymentLogic'
 
 export default function Checkout() {
   const [products, setProducts] = useState([])
@@ -19,8 +30,6 @@ export default function Checkout() {
   const [payments, setPayments] = useState({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
   const [cashReceived, setCashReceived] = useState('')
 
-  const PAYMENT_METHODS = ['現金', 'Linepay', '街口支付', '銀行轉帳']
-
   const barcodeRef = useRef(null)
   const barcodeBuffer = useRef('')
   const barcodeTimer = useRef(null)
@@ -38,8 +47,6 @@ export default function Checkout() {
   }, [])
 
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
-
-  const calcSubtotal = (price, quantity, addonFee, discount = 10) => price * (discount / 10) * quantity + (addonFee || 0)
 
   const addToCart = useCallback((product) => {
     setCart(prev => {
@@ -162,18 +169,16 @@ export default function Checkout() {
   }
 
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
+  const total = calcCartTotal(cart)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
-  const totalDiscount = cart.reduce((sum, item) => {
-    const d = item.discount ?? 10
-    return sum + item.price * item.quantity * (1 - d / 10)
-  }, 0)
+  const totalDiscount = calcCartDiscount(cart)
 
-  const totalPaid = PAYMENT_METHODS.reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
-  const remaining = total - totalPaid
+  const totalPaid = calcTotalPaid(payments)
+  const remaining = calcRemaining(total, totalPaid)
   const cashAmount = parseFloat(payments['現金']) || 0
   const cashReceivedAmt = parseFloat(cashReceived) || 0
-  const cashChange = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt - cashAmount : null
+  const cashDue = calcCashDue(remaining, cashAmount)
+  const cashChange = calcCashChange(cashAmount, cashReceivedAmt, cashDue, cashReceived)
 
   const handleMethodFill = (method) => {
     const othersTotal = PAYMENT_METHODS
@@ -184,9 +189,8 @@ export default function Checkout() {
   }
 
   const handleCheckout = () => {
-    if (cart.length === 0) { showError('購物車是空的，請先加入商品'); return }
-    if (Math.round(remaining) !== 0) { showError('付款金額合計須等於應付總額'); return }
-    if (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashAmount) { showError('現金收款金額不足'); return }
+    const err = validatePayment({ cart, remaining, cashAmount, cashReceivedAmt, cashReceived, cashDue })
+    if (err) { showError(err); return }
     confirmCheckout()
   }
 
@@ -200,7 +204,8 @@ export default function Checkout() {
         : activePayments.length === 1 ? activePayments[0].method
         : activePayments.map(p => p.method).join(' + ')
       const cashRecv = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt : undefined
-      const cashChg = cashRecv != null ? cashRecv - cashAmount : undefined
+      const cashChg = cashRecv != null ? cashRecv - cashDue
+        : cashAmount > cashDue ? Math.round(cashAmount - cashDue) : undefined
       const transaction = {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
@@ -546,7 +551,7 @@ export default function Checkout() {
             ) : remaining > 0 ? (
               <><span className="text-neutral-500">未付金額</span><span className="text-red-500">NT$ {Math.round(remaining).toLocaleString()}</span></>
             ) : (
-              <><span className="text-neutral-500">超付</span><span className="text-orange-500">NT$ {Math.abs(Math.round(remaining)).toLocaleString()}</span></>
+              <><span className="text-neutral-500">超付</span><span className="text-orange-500">NT$ {Math.round(Math.abs(remaining)).toLocaleString()}</span></>
             )}
           </div>
 
@@ -557,12 +562,12 @@ export default function Checkout() {
                 type="number"
                 value={cashReceived}
                 onChange={e => setCashReceived(e.target.value)}
-                placeholder={String(cashAmount)}
+                placeholder={String(Math.round(cashDue))}
                 min="0"
                 step="1"
                 className="w-full border border-neutral-300 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              {cashReceived !== '' && (
+              {(cashReceived !== '' || cashChange != null) && (
                 <div className={`mt-2 flex justify-between text-xs tracking-wide ${cashChange != null && cashChange < 0 ? 'text-red-500' : 'text-brand-600'}`}>
                   <span>{cashChange != null && cashChange < 0 ? '現金不足' : '找零'}</span>
                   <span>NT$ {cashChange != null ? Math.abs(cashChange).toLocaleString() : '0'}</span>
@@ -575,7 +580,7 @@ export default function Checkout() {
         {/* Checkout button */}
         <button
           onClick={handleCheckout}
-          disabled={cart.length === 0 || isCheckingOut || Math.round(remaining) !== 0 || (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashAmount)}
+          disabled={cart.length === 0 || isCheckingOut || Math.round(remaining) > 0 || (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashDue)}
           className="w-full py-4 bg-brand-600 text-white text-xs tracking-widest uppercase font-light hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 shadow-sm"
         >
           {isCheckingOut ? (
