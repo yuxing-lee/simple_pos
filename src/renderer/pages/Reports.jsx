@@ -546,6 +546,7 @@ export default function Reports() {
                           <tr className="bg-neutral-50">
                             <th className="px-4 py-2.5 text-left font-light tracking-widest text-neutral-400 uppercase">商品名稱</th>
                             <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">單價</th>
+                            <th className="px-4 py-2.5 text-center font-light tracking-widest text-neutral-400 uppercase">折扣</th>
                             <th className="px-4 py-2.5 text-center font-light tracking-widest text-neutral-400 uppercase">數量</th>
                             <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">加購費用</th>
                             <th className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-400 uppercase">小計</th>
@@ -556,6 +557,14 @@ export default function Reports() {
                             <tr key={idx}>
                               <td className="px-4 py-2.5 font-light text-[#2d2d2d] tracking-wide">{item.name}</td>
                               <td className="px-4 py-2.5 text-right text-neutral-500 font-light">NT$ {Number(item.price).toLocaleString()}</td>
+                              <td className="px-4 py-2.5 text-center font-light text-neutral-500">
+                                {(item.discount != null && item.discount < 10) ? (
+                                  <div>
+                                    <div className="text-orange-500">打{item.discount}折</div>
+                                    <div className="text-neutral-400">−NT$ {Math.round(item.price * item.quantity * (1 - item.discount / 10)).toLocaleString()}</div>
+                                  </div>
+                                ) : '—'}
+                              </td>
                               <td className="px-4 py-2.5 text-center text-neutral-500 font-light">{item.quantity}</td>
                               <td className="px-4 py-2.5 text-right font-light text-neutral-500">
                                 {item.addonFee > 0 ? `NT$ ${Number(item.addonFee).toLocaleString()}` : '—'}
@@ -566,7 +575,7 @@ export default function Reports() {
                         </tbody>
                         <tfoot>
                           <tr className="bg-brand-50">
-                            <td colSpan={4} className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-500 text-xs uppercase">合計</td>
+                            <td colSpan={5} className="px-4 py-2.5 text-right font-light tracking-widest text-neutral-500 text-xs uppercase">合計</td>
                             <td className="px-4 py-2.5 text-right font-light text-brand-600">NT$ {Number(tx.total).toLocaleString()}</td>
                           </tr>
                         </tfoot>
