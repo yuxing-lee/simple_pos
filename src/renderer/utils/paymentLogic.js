@@ -1,10 +1,10 @@
 export const PAYMENT_METHODS = ['現金', 'Linepay', '街口支付', '銀行轉帳']
 
 /**
- * 計算商品小計，discount 以 10 為滿分（10 = 全額，8 = 八折）
+ * 計算商品小計，discountCash 為固定折現金額（NT$）
  */
-export const calcSubtotal = (price, quantity, addonFee = 0, discount = 10) =>
-  price * (discount / 10) * quantity + (addonFee || 0)
+export const calcSubtotal = (price, quantity, addonFee = 0, discountCash = 0) =>
+  Math.max(0, price * quantity - discountCash) + (addonFee || 0)
 
 /** 購物車商品金額總計（折扣後） */
 export const calcCartTotal = (cart) =>
@@ -12,10 +12,9 @@ export const calcCartTotal = (cart) =>
 
 /** 購物車折扣金額總計 */
 export const calcCartDiscount = (cart) =>
-  cart.reduce((sum, item) => {
-    const d = item.discount ?? 10
-    return sum + item.price * item.quantity * (1 - d / 10)
-  }, 0)
+  cart.reduce((sum, item) =>
+    sum + Math.min(item.discountCash || 0, item.price * item.quantity)
+  , 0)
 
 /** 各付款方式已填入金額合計 */
 export const calcTotalPaid = (payments) =>

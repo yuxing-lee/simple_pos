@@ -13,36 +13,40 @@ import {
 // ─── calcSubtotal ───────────────────────────────────────────────────────────
 
 describe('calcSubtotal', () => {
-  it('全額（折扣 10）', () => {
-    expect(calcSubtotal(100, 1, 0, 10)).toBe(100)
-  })
-
-  it('八折（折扣 8）', () => {
-    expect(calcSubtotal(100, 1, 0, 8)).toBe(80)
+  it('無折現金（全額）', () => {
+    expect(calcSubtotal(100, 1)).toBe(100)
   })
 
   it('數量 > 1', () => {
-    expect(calcSubtotal(50, 3, 0, 10)).toBe(150)
+    expect(calcSubtotal(50, 3)).toBe(150)
   })
 
   it('含加購費用', () => {
-    expect(calcSubtotal(100, 1, 50, 10)).toBe(150)
+    expect(calcSubtotal(100, 1, 50)).toBe(150)
   })
 
-  it('折扣 + 加購費用', () => {
-    expect(calcSubtotal(100, 2, 30, 9)).toBe(210) // 100*0.9*2 + 30
+  it('折現金 50 元', () => {
+    expect(calcSubtotal(200, 1, 0, 50)).toBe(150)
   })
 
-  it('預設折扣為全額', () => {
-    expect(calcSubtotal(80, 2)).toBe(160)
+  it('多件商品折現金', () => {
+    expect(calcSubtotal(100, 3, 0, 50)).toBe(250)
+  })
+
+  it('折現金 + 加購費用', () => {
+    expect(calcSubtotal(200, 1, 30, 50)).toBe(180) // 200-50+30
+  })
+
+  it('折現金超過商品金額時小計為加購費用', () => {
+    expect(calcSubtotal(100, 1, 20, 200)).toBe(20) // max(0,100-200)+20
   })
 
   it('單價為 0', () => {
-    expect(calcSubtotal(0, 5, 0, 10)).toBe(0)
+    expect(calcSubtotal(0, 5)).toBe(0)
   })
 
   it('addonFee 為 undefined 時視為 0', () => {
-    expect(calcSubtotal(100, 1, undefined, 10)).toBe(100)
+    expect(calcSubtotal(100, 1, undefined, 0)).toBe(100)
   })
 })
 
@@ -66,27 +70,32 @@ describe('calcCartTotal', () => {
 // ─── calcCartDiscount ────────────────────────────────────────────────────────
 
 describe('calcCartDiscount', () => {
-  it('無折扣（discount 10）回傳 0', () => {
-    const cart = [{ price: 100, quantity: 1, discount: 10 }]
+  it('無折現金回傳 0', () => {
+    const cart = [{ price: 100, quantity: 1, discountCash: 0 }]
     expect(calcCartDiscount(cart)).toBe(0)
   })
 
-  it('八折折扣金額', () => {
-    const cart = [{ price: 100, quantity: 1, discount: 8 }]
-    expect(calcCartDiscount(cart)).toBeCloseTo(20, 5)
-  })
-
-  it('未設 discount 欄位預設為全額（折扣 0）', () => {
+  it('未設 discountCash 欄位預設為 0', () => {
     const cart = [{ price: 100, quantity: 2 }]
     expect(calcCartDiscount(cart)).toBe(0)
   })
 
-  it('多筆折扣加總', () => {
+  it('單筆折現金', () => {
+    const cart = [{ price: 200, quantity: 1, discountCash: 50 }]
+    expect(calcCartDiscount(cart)).toBe(50)
+  })
+
+  it('折現金超過商品金額，折扣上限為商品金額', () => {
+    const cart = [{ price: 100, quantity: 1, discountCash: 300 }]
+    expect(calcCartDiscount(cart)).toBe(100)
+  })
+
+  it('多筆折現金加總', () => {
     const cart = [
-      { price: 100, quantity: 1, discount: 8 }, // 折 20
-      { price: 200, quantity: 2, discount: 9 },  // 折 40
+      { price: 100, quantity: 2, discountCash: 30 },
+      { price: 200, quantity: 1, discountCash: 50 },
     ]
-    expect(calcCartDiscount(cart)).toBeCloseTo(60, 5)
+    expect(calcCartDiscount(cart)).toBe(80)
   })
 })
 
