@@ -59,7 +59,7 @@ export default function Checkout() {
             : item
         )
       }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, discount: 10, discountType: 'percent', discountCash: 0, subtotal: product.price }]
+      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, discountCash: 0, subtotal: product.price }]
     })
   }, [])
 
@@ -122,7 +122,7 @@ export default function Checkout() {
       if (item.productId !== productId) return item
       const newQty = item.quantity + delta
       if (newQty <= 0) return null
-      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discount ?? 10, item.discountType ?? 'percent', item.discountCash ?? 0) }
+      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
     }).filter(Boolean))
   }
 
@@ -130,7 +130,7 @@ export default function Checkout() {
     const n = parseInt(qty, 10)
     if (isNaN(n) || n < 1) return
     setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee, item.discount ?? 10, item.discountType ?? 'percent', item.discountCash ?? 0) } : item
+      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee, item.discountCash ?? 0) } : item
     ))
   }
 
@@ -138,17 +138,7 @@ export default function Checkout() {
     const n = parseFloat(fee) || 0
     if (n < 0) return
     setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discount ?? 10, item.discountType ?? 'percent', item.discountCash ?? 0) } : item
-    ))
-  }
-
-  const setDiscount = (productId, val) => {
-    const n = val === '' ? 10 : parseFloat(val)
-    if (isNaN(n) || n < 0 || n > 10) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId
-        ? { ...item, discount: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, n, 'percent', 0) }
-        : item
+      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discountCash ?? 0) } : item
     ))
   }
 
@@ -157,19 +147,9 @@ export default function Checkout() {
     if (n < 0) return
     setCart(prev => prev.map(item =>
       item.productId === productId
-        ? { ...item, discountCash: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, 10, 'cash', n) }
+        ? { ...item, discountCash: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, n) }
         : item
     ))
-  }
-
-  const setDiscountType = (productId, type) => {
-    setCart(prev => prev.map(item => {
-      if (item.productId !== productId) return item
-      const subtotal = type === 'cash'
-        ? calcSubtotal(item.price, item.quantity, item.addonFee, 10, 'cash', item.discountCash ?? 0)
-        : calcSubtotal(item.price, item.quantity, item.addonFee, item.discount ?? 10, 'percent', 0)
-      return { ...item, discountType: type, subtotal }
-    }))
   }
 
   const addCustomItem = () => {
@@ -180,7 +160,7 @@ export default function Checkout() {
     if (isNaN(price) || price < 0) { showError('請輸入有效的單價'); return }
     if (isNaN(qty) || qty < 1) { showError('數量至少為 1'); return }
     const customId = 'custom_' + Date.now()
-    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, discount: 10, discountType: 'percent', discountCash: 0, subtotal: calcSubtotal(price, qty, 0, 10) }])
+    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, discountCash: 0, subtotal: calcSubtotal(price, qty) }])
     setCustomName('')
     setCustomPrice('')
     setCustomQty('1')
@@ -435,45 +415,17 @@ export default function Checkout() {
                       <td className="px-5 py-3 font-light text-[#2d2d2d] tracking-wide">{item.name}</td>
                       <td className="px-4 py-3 text-right text-neutral-500 font-light">NT$ {Number(item.price).toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex text-xs border border-neutral-300 overflow-hidden">
-                            <button
-                              onClick={() => setDiscountType(item.productId, 'percent')}
-                              className={`px-1.5 py-0.5 transition-colors ${(item.discountType ?? 'percent') !== 'cash' ? 'bg-orange-400 text-white' : 'text-neutral-400 hover:bg-neutral-100'}`}
-                            >打折</button>
-                            <button
-                              onClick={() => setDiscountType(item.productId, 'cash')}
-                              className={`px-1.5 py-0.5 transition-colors ${item.discountType === 'cash' ? 'bg-orange-400 text-white' : 'text-neutral-400 hover:bg-neutral-100'}`}
-                            >折現</button>
-                          </div>
-                          {item.discountType === 'cash' ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-neutral-400">NT$</span>
-                              <input
-                                type="number"
-                                value={item.discountCash || ''}
-                                onChange={e => setCashDiscount(item.productId, e.target.value)}
-                                placeholder="0"
-                                min="0"
-                                step="1"
-                                className="w-16 text-center border border-neutral-300 py-0.5 text-sm focus:outline-none focus:border-brand-500 font-light placeholder-neutral-300"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={(item.discount ?? 10) < 10 ? (item.discount ?? 10) : ''}
-                                onChange={e => setDiscount(item.productId, e.target.value)}
-                                placeholder="10"
-                                min="0"
-                                max="10"
-                                step="0.5"
-                                className="w-14 text-center border border-neutral-300 py-0.5 text-sm focus:outline-none focus:border-brand-500 font-light placeholder-neutral-300"
-                              />
-                              <span className="text-xs text-neutral-400">折</span>
-                            </div>
-                          )}
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs text-neutral-400">NT$</span>
+                          <input
+                            type="number"
+                            value={item.discountCash || ''}
+                            onChange={e => setCashDiscount(item.productId, e.target.value)}
+                            placeholder="0"
+                            min="0"
+                            step="1"
+                            className="w-16 text-center border border-neutral-300 py-0.5 text-sm focus:outline-none focus:border-brand-500 font-light placeholder-neutral-300"
+                          />
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -502,14 +454,9 @@ export default function Checkout() {
                       </td>
                       <td className="px-4 py-3 text-right font-light text-[#2d2d2d]">
                         NT$ {Number(item.subtotal).toLocaleString()}
-                        {item.discountType === 'cash' && item.discountCash > 0 && (
+                        {item.discountCash > 0 && (
                           <div className="text-xs text-orange-400 mt-0.5">
                             折現 −NT$ {Number(item.discountCash).toLocaleString()}
-                          </div>
-                        )}
-                        {(item.discountType ?? 'percent') !== 'cash' && (item.discount ?? 10) < 10 && (
-                          <div className="text-xs text-orange-400 mt-0.5">
-                            打{item.discount}折 −NT$ {Math.round(item.price * item.quantity * (1 - item.discount / 10)).toLocaleString()}
                           </div>
                         )}
                         {item.addonFee > 0 && (
