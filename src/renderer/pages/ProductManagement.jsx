@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { supabase } from '../utils/supabase'
+import { cuid } from '../utils/cuid'
 
 function BarcodeImage({ value }) {
   const svgRef = useRef(null)
@@ -124,11 +125,12 @@ export default function ProductManagement() {
     if (isNaN(parsedPrice) || parsedPrice < 0) { showError('請輸入有效的商品價格'); return }
 
     setSaving(true)
-    const id = String(Date.now())
+    const id = cuid()
+    const barcode = String(Date.now())
     const now = new Date().toISOString()
     const { data: newProduct, error: err } = await supabase
       .from('Product')
-      .insert({ id, name: trimmedName, price: parsedPrice, barcode: id, image: '', description: '', visible: true, featured: false, sortOrder: 0, createdAt: now, updatedAt: now })
+      .insert({ id, name: trimmedName, price: parsedPrice, barcode, image: '', description: '', visible: true, featured: false, sortOrder: 0, createdAt: now, updatedAt: now })
       .select('id, name, price, barcode, image, visible')
       .single()
 
