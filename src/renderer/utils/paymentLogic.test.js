@@ -44,6 +44,22 @@ describe('calcSubtotal', () => {
   it('addonFee 為 undefined 時視為 0', () => {
     expect(calcSubtotal(100, 1, undefined, 10)).toBe(100)
   })
+
+  it('折現金：固定折 50 元', () => {
+    expect(calcSubtotal(200, 1, 0, 10, 'cash', 50)).toBe(150)
+  })
+
+  it('折現金：多件商品折現金', () => {
+    expect(calcSubtotal(100, 3, 0, 10, 'cash', 50)).toBe(250)
+  })
+
+  it('折現金 + 加購費用', () => {
+    expect(calcSubtotal(200, 1, 30, 10, 'cash', 50)).toBe(180) // 200-50+30
+  })
+
+  it('折現金超過商品金額時小計為加購費用', () => {
+    expect(calcSubtotal(100, 1, 20, 10, 'cash', 200)).toBe(20) // max(0,100-200)+20
+  })
 })
 
 // ─── calcCartTotal ───────────────────────────────────────────────────────────
@@ -87,6 +103,24 @@ describe('calcCartDiscount', () => {
       { price: 200, quantity: 2, discount: 9 },  // 折 40
     ]
     expect(calcCartDiscount(cart)).toBeCloseTo(60, 5)
+  })
+
+  it('折現金類型', () => {
+    const cart = [{ price: 200, quantity: 1, discountType: 'cash', discountCash: 50 }]
+    expect(calcCartDiscount(cart)).toBe(50)
+  })
+
+  it('折現金超過商品金額，折扣上限為商品金額', () => {
+    const cart = [{ price: 100, quantity: 1, discountType: 'cash', discountCash: 300 }]
+    expect(calcCartDiscount(cart)).toBe(100)
+  })
+
+  it('混合打折與折現金', () => {
+    const cart = [
+      { price: 100, quantity: 2, discount: 8 },                              // 折 40
+      { price: 200, quantity: 1, discountType: 'cash', discountCash: 30 },   // 折 30
+    ]
+    expect(calcCartDiscount(cart)).toBeCloseTo(70, 5)
   })
 })
 

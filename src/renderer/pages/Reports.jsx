@@ -558,7 +558,12 @@ export default function Reports() {
                               <td className="px-4 py-2.5 font-light text-[#2d2d2d] tracking-wide">{item.name}</td>
                               <td className="px-4 py-2.5 text-right text-neutral-500 font-light">NT$ {Number(item.price).toLocaleString()}</td>
                               <td className="px-4 py-2.5 text-center font-light text-neutral-500">
-                                {(item.discount != null && item.discount < 10) ? (
+                                {item.discountType === 'cash' && item.discountCash > 0 ? (
+                                  <div>
+                                    <div className="text-orange-500">折現金</div>
+                                    <div className="text-neutral-400">−NT$ {Number(item.discountCash).toLocaleString()}</div>
+                                  </div>
+                                ) : (item.discount != null && item.discount < 10) ? (
                                   <div>
                                     <div className="text-orange-500">打{item.discount}折</div>
                                     <div className="text-neutral-400">−NT$ {Math.round(item.price * item.quantity * (1 - item.discount / 10)).toLocaleString()}</div>
