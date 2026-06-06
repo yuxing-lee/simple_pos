@@ -55,7 +55,7 @@ export default function Checkout() {
         const newQty = existing.quantity + 1
         return prev.map(item =>
           item.productId === product.id
-            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discount ?? 10) }
+            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
             : item
         )
       }

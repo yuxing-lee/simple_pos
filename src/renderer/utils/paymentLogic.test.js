@@ -48,6 +48,11 @@ describe('calcSubtotal', () => {
   it('addonFee 為 undefined 時視為 0', () => {
     expect(calcSubtotal(100, 1, undefined, 0)).toBe(100)
   })
+
+  it('discountCash 為 0 時，重複加入商品數量不應被錯誤折扣', () => {
+    // 模擬 addToCart 重複掃碼：discountCash=0，數量從 1 增為 2
+    expect(calcSubtotal(100, 2, 0, 0)).toBe(200)
+  })
 })
 
 // ─── calcCartTotal ───────────────────────────────────────────────────────────
