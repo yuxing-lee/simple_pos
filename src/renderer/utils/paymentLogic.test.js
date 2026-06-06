@@ -48,6 +48,11 @@ describe('calcSubtotal', () => {
   it('addonFee 為 undefined 時視為 0', () => {
     expect(calcSubtotal(100, 1, undefined, 0)).toBe(100)
   })
+
+  it('discountCash 為 0 時，重複加入商品數量不應被錯誤折扣', () => {
+    // 模擬 addToCart 重複掃碼：discountCash=0，數量從 1 增為 2
+    expect(calcSubtotal(100, 2, 0, 0)).toBe(200)
+  })
 })
 
 // ─── calcCartTotal ───────────────────────────────────────────────────────────
@@ -193,6 +198,11 @@ describe('calcCashChange', () => {
     // total=4.5, 現金=5, cashDue=4.5, cashAmount=5 > cashDue=4.5
     // Math.round(5 - 4.5) = Math.round(0.5) = 1
     expect(calcCashChange(5, 0, 4.5, '')).toBe(1)
+  })
+
+  it('已填客付現金，找零含浮點數時應四捨五入', () => {
+    // cashDue 因浮點加購費而帶小數：1000 - 649.5 = 350.5 → 應 round 為 351
+    expect(calcCashChange(649.5, 1000, 649.5, '1000')).toBe(351)
   })
 
   it('已填客付現金，精確給付', () => {

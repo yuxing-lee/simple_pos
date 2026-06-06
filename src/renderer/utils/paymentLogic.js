@@ -38,7 +38,7 @@ export const calcCashDue = (remaining, cashAmount) =>
  */
 export const calcCashChange = (cashAmount, cashReceivedAmt, cashDue, cashReceived) => {
   if (cashAmount <= 0) return null
-  if (cashReceived !== '') return cashReceivedAmt - cashDue
+  if (cashReceived !== '') return Math.round(cashReceivedAmt - cashDue)
   return cashAmount > cashDue ? Math.round(cashAmount - cashDue) : null
 }
 
