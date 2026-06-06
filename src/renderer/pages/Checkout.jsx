@@ -135,7 +135,7 @@ export default function Checkout() {
   }
 
   const setAddonFee = (productId, fee) => {
-    const n = parseFloat(fee) || 0
+    const n = Math.round(parseFloat(fee) || 0)
     if (n < 0) return
     setCart(prev => prev.map(item =>
       item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discountCash ?? 0) } : item
@@ -143,7 +143,7 @@ export default function Checkout() {
   }
 
   const setCashDiscount = (productId, val) => {
-    const n = parseFloat(val) || 0
+    const n = Math.round(parseFloat(val) || 0)
     if (n < 0) return
     setCart(prev => prev.map(item =>
       item.productId === productId
@@ -154,7 +154,7 @@ export default function Checkout() {
 
   const addCustomItem = () => {
     const name = customName.trim()
-    const price = parseFloat(customPrice)
+    const price = Math.round(parseFloat(customPrice))
     const qty = parseInt(customQty, 10)
     if (!name) { showError('請輸入商品名稱'); return }
     if (isNaN(price) || price < 0) { showError('請輸入有效的單價'); return }
@@ -204,7 +204,7 @@ export default function Checkout() {
         : activePayments.length === 1 ? activePayments[0].method
         : activePayments.map(p => p.method).join(' + ')
       const cashRecv = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt : undefined
-      const cashChg = cashRecv != null ? cashRecv - cashDue
+      const cashChg = cashRecv != null ? Math.round(cashRecv - cashDue)
         : cashAmount > cashDue ? Math.round(cashAmount - cashDue) : undefined
       const transaction = {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,

@@ -200,6 +200,11 @@ describe('calcCashChange', () => {
     expect(calcCashChange(5, 0, 4.5, '')).toBe(1)
   })
 
+  it('已填客付現金，找零含浮點數時應四捨五入', () => {
+    // cashDue 因浮點加購費而帶小數：1000 - 649.5 = 350.5 → 應 round 為 351
+    expect(calcCashChange(649.5, 1000, 649.5, '1000')).toBe(351)
+  })
+
   it('已填客付現金，精確給付', () => {
     expect(calcCashChange(100, 100, 100, '100')).toBe(0)
   })
