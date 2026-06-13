@@ -175,7 +175,7 @@ export default function Checkout() {
   const totalDiscount = calcCartDiscount(cart)
 
   const totalPaid = calcTotalPaid(payments)
-  const wrappedCashAmt = Math.round(parseFloat(wrappedCash) || 0)
+  const wrappedCashAmt = Math.max(0, Math.round(parseFloat(wrappedCash) || 0))
   const effectiveTotal = total + wrappedCashAmt
   const remaining = calcRemaining(effectiveTotal, totalPaid)
   const cashAmount = parseFloat(payments['現金']) || 0
