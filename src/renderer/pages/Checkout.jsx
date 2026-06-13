@@ -11,6 +11,13 @@ import {
   calcCashChange,
   validatePayment,
 } from '../utils/paymentLogic'
+import {
+  cartAddItem,
+  cartUpdateQuantity,
+  cartSetQuantity,
+  cartSetAddonFee,
+  cartSetDiscount,
+} from '../utils/cartLogic'
 
 export default function Checkout() {
   const [products, setProducts] = useState([])
@@ -50,18 +57,7 @@ export default function Checkout() {
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
 
   const addToCart = useCallback((product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.productId === product.id)
-      if (existing) {
-        const newQty = existing.quantity + 1
-        return prev.map(item =>
-          item.productId === product.id
-            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
-            : item
-        )
-      }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, discountCash: 0, subtotal: product.price }]
-    })
+    setCart(prev => cartAddItem(prev, product))
   }, [])
 
   const lookupByBarcode = useCallback(async (code) => {
@@ -118,40 +114,10 @@ export default function Checkout() {
     addToCart(product); setSearchQuery(''); setSearchResults([]); setShowSearch(false); barcodeRef.current?.focus()
   }
 
-  const updateQuantity = (productId, delta) => {
-    setCart(prev => prev.map(item => {
-      if (item.productId !== productId) return item
-      const newQty = item.quantity + delta
-      if (newQty <= 0) return null
-      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
-    }).filter(Boolean))
-  }
-
-  const setQuantity = (productId, qty) => {
-    const n = parseInt(qty, 10)
-    if (isNaN(n) || n < 1) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee, item.discountCash ?? 0) } : item
-    ))
-  }
-
-  const setAddonFee = (productId, fee) => {
-    const n = Math.round(parseFloat(fee) || 0)
-    if (n < 0) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discountCash ?? 0) } : item
-    ))
-  }
-
-  const setCashDiscount = (productId, val) => {
-    const n = Math.round(parseFloat(val) || 0)
-    if (n < 0) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId
-        ? { ...item, discountCash: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, n) }
-        : item
-    ))
-  }
+  const updateQuantity = (productId, delta) => setCart(prev => cartUpdateQuantity(prev, productId, delta))
+  const setQuantity = (productId, qty) => setCart(prev => cartSetQuantity(prev, productId, qty))
+  const setAddonFee = (productId, fee) => setCart(prev => cartSetAddonFee(prev, productId, fee))
+  const setCashDiscount = (productId, val) => setCart(prev => cartSetDiscount(prev, productId, val))
 
   const addCustomItem = () => {
     const name = customName.trim()
