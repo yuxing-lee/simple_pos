@@ -11,6 +11,13 @@ import {
   calcCashChange,
   validatePayment,
 } from '../utils/paymentLogic'
+import {
+  cartAddItem,
+  cartUpdateQuantity,
+  cartSetQuantity,
+  cartSetAddonFee,
+  cartSetDiscount,
+} from '../utils/cartLogic'
 
 export default function Checkout() {
   const [products, setProducts] = useState([])
@@ -29,6 +36,7 @@ export default function Checkout() {
   const [customQty, setCustomQty] = useState('1')
   const [payments, setPayments] = useState({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
   const [cashReceived, setCashReceived] = useState('')
+  const [wrappedCash, setWrappedCash] = useState('')
 
   const barcodeRef = useRef(null)
   const barcodeBuffer = useRef('')
@@ -49,18 +57,7 @@ export default function Checkout() {
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
 
   const addToCart = useCallback((product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.productId === product.id)
-      if (existing) {
-        const newQty = existing.quantity + 1
-        return prev.map(item =>
-          item.productId === product.id
-            ? { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
-            : item
-        )
-      }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity: 1, addonFee: 0, discountCash: 0, subtotal: product.price }]
-    })
+    setCart(prev => cartAddItem(prev, product))
   }, [])
 
   const lookupByBarcode = useCallback(async (code) => {
@@ -117,40 +114,10 @@ export default function Checkout() {
     addToCart(product); setSearchQuery(''); setSearchResults([]); setShowSearch(false); barcodeRef.current?.focus()
   }
 
-  const updateQuantity = (productId, delta) => {
-    setCart(prev => prev.map(item => {
-      if (item.productId !== productId) return item
-      const newQty = item.quantity + delta
-      if (newQty <= 0) return null
-      return { ...item, quantity: newQty, subtotal: calcSubtotal(item.price, newQty, item.addonFee, item.discountCash ?? 0) }
-    }).filter(Boolean))
-  }
-
-  const setQuantity = (productId, qty) => {
-    const n = parseInt(qty, 10)
-    if (isNaN(n) || n < 1) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, quantity: n, subtotal: calcSubtotal(item.price, n, item.addonFee, item.discountCash ?? 0) } : item
-    ))
-  }
-
-  const setAddonFee = (productId, fee) => {
-    const n = Math.round(parseFloat(fee) || 0)
-    if (n < 0) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId ? { ...item, addonFee: n, subtotal: calcSubtotal(item.price, item.quantity, n, item.discountCash ?? 0) } : item
-    ))
-  }
-
-  const setCashDiscount = (productId, val) => {
-    const n = Math.round(parseFloat(val) || 0)
-    if (n < 0) return
-    setCart(prev => prev.map(item =>
-      item.productId === productId
-        ? { ...item, discountCash: n, subtotal: calcSubtotal(item.price, item.quantity, item.addonFee, n) }
-        : item
-    ))
-  }
+  const updateQuantity = (productId, delta) => setCart(prev => cartUpdateQuantity(prev, productId, delta))
+  const setQuantity = (productId, qty) => setCart(prev => cartSetQuantity(prev, productId, qty))
+  const setAddonFee = (productId, fee) => setCart(prev => cartSetAddonFee(prev, productId, fee))
+  const setCashDiscount = (productId, val) => setCart(prev => cartSetDiscount(prev, productId, val))
 
   const addCustomItem = () => {
     const name = customName.trim()
@@ -174,7 +141,9 @@ export default function Checkout() {
   const totalDiscount = calcCartDiscount(cart)
 
   const totalPaid = calcTotalPaid(payments)
-  const remaining = calcRemaining(total, totalPaid)
+  const wrappedCashAmt = Math.max(0, Math.round(parseFloat(wrappedCash) || 0))
+  const effectiveTotal = total + wrappedCashAmt
+  const remaining = calcRemaining(effectiveTotal, totalPaid)
   const cashAmount = parseFloat(payments['現金']) || 0
   const cashReceivedAmt = parseFloat(cashReceived) || 0
   const cashDue = calcCashDue(remaining, cashAmount)
@@ -184,7 +153,7 @@ export default function Checkout() {
     const othersTotal = PAYMENT_METHODS
       .filter(m => m !== method)
       .reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
-    const fillAmt = Math.max(0, total - othersTotal)
+    const fillAmt = Math.max(0, effectiveTotal - othersTotal)
     if (fillAmt > 0) setPayments(prev => ({ ...prev, [method]: String(fillAmt) }))
   }
 
@@ -210,12 +179,14 @@ export default function Checkout() {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
         cashReceived: cashRecv, cashChange: cashChg,
+        ...(wrappedCashAmt > 0 && { wrappedCash: wrappedCashAmt }),
       }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
       setPayments({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
       setCashReceived('')
+      setWrappedCash('')
       setCheckoutSuccess(true)
       setTimeout(() => setCheckoutSuccess(false), 5000)
       barcodeRef.current?.focus()
@@ -252,6 +223,7 @@ export default function Checkout() {
             <p className="text-xs text-brand-500 tracking-wide">
               NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}
               {lastTransaction.cashChange != null && lastTransaction.cashChange > 0 && <span className="ml-1">· 找零 NT$ {lastTransaction.cashChange.toLocaleString()}</span>}
+              {lastTransaction.wrappedCash > 0 && <span className="ml-1">· 花束包現金 NT$ {lastTransaction.wrappedCash.toLocaleString()}</span>}
             </p>
           </div>
         )}
@@ -507,11 +479,23 @@ export default function Checkout() {
               </div>
             )}
           </div>
-          <div className="border-t border-neutral-500/10 pt-4">
+          <div className="border-t border-neutral-500/10 pt-4 space-y-2">
             <div className="flex justify-between items-baseline">
-              <span className="text-xs tracking-widest uppercase text-neutral-400">總金額</span>
+              <span className="text-xs tracking-widest uppercase text-neutral-400">商品金額</span>
               <span className="text-xl font-light text-brand-600">NT$ {total.toLocaleString()}</span>
             </div>
+            {wrappedCashAmt > 0 && (
+              <>
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="text-neutral-400 tracking-wide">花束包現金</span>
+                  <span className="text-neutral-500">NT$ {wrappedCashAmt.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-baseline border-t border-neutral-500/10 pt-2">
+                  <span className="text-xs tracking-widest uppercase text-neutral-400">客付合計</span>
+                  <span className="text-lg font-light text-[#2d2d2d]">NT$ {effectiveTotal.toLocaleString()}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -542,6 +526,25 @@ export default function Checkout() {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-neutral-500/10">
+            <label className="block text-xs text-neutral-400 tracking-wider mb-1.5">
+              花束包現金 (NT$)
+            </label>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-neutral-400 flex-shrink-0">NT$</span>
+              <input
+                type="number"
+                value={wrappedCash}
+                onChange={e => setWrappedCash(e.target.value)}
+                placeholder="0"
+                min="0"
+                step="1"
+                className="w-full border border-neutral-300 px-2 py-1.5 text-xs font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-right"
+              />
+            </div>
+            <p className="text-xs text-neutral-300 tracking-wide mt-1">包入花束，不計入營業額</p>
           </div>
 
           <div className="mt-3 pt-2 border-t border-neutral-500/10 flex justify-between items-center text-xs tracking-wide">
