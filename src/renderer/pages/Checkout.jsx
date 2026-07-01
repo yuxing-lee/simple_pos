@@ -21,6 +21,7 @@ import {
 
 export default function Checkout() {
   const [products, setProducts] = useState([])
+  const [quickSelectIds, setQuickSelectIds] = useState([])
   const [cart, setCart] = useState([])
   const [barcodeInput, setBarcodeInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -51,6 +52,7 @@ export default function Checkout() {
       .order('sortOrder', { ascending: true })
       .then(({ data }) => setProducts(data || []))
       .catch(() => {})
+    window.api.quickSelect.getAll().then(setQuickSelectIds).catch(() => {})
     barcodeRef.current?.focus()
   }, [])
 
@@ -136,6 +138,7 @@ export default function Checkout() {
   }
 
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
+  const quickSelectProducts = products.filter(p => quickSelectIds.includes(p.id))
   const total = calcCartTotal(cart)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
   const totalDiscount = calcCartDiscount(cart)
@@ -518,6 +521,7 @@ export default function Checkout() {
                     type="number"
                     value={payments[method]}
                     onChange={e => setPayments(prev => ({ ...prev, [method]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleCheckout()}
                     placeholder="0"
                     min="0"
                     step="1"
@@ -538,6 +542,7 @@ export default function Checkout() {
                 type="number"
                 value={wrappedCash}
                 onChange={e => setWrappedCash(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCheckout()}
                 placeholder="0"
                 min="0"
                 step="1"
@@ -564,6 +569,7 @@ export default function Checkout() {
                 type="number"
                 value={cashReceived}
                 onChange={e => setCashReceived(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCheckout()}
                 placeholder={String(Math.round(cashDue))}
                 min="0"
                 step="1"
@@ -603,15 +609,15 @@ export default function Checkout() {
             <p className="text-xs tracking-widest uppercase text-neutral-400">商品快選</p>
           </div>
           <div className="overflow-y-auto flex-1 p-2">
-            {products.length === 0 ? (
-              <p className="text-xs text-neutral-300 text-center py-4 tracking-wider">尚無商品</p>
+            {quickSelectProducts.length === 0 ? (
+              <p className="text-xs text-neutral-300 text-center py-4 tracking-wider px-2">尚無快選商品，請至商品管理設定</p>
             ) : (
-              <div className="space-y-0.5">
-                {products.map(p => (
+              <div className="space-y-1.5">
+                {quickSelectProducts.map(p => (
                   <button key={p.id} onClick={() => addToCart(p)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-brand-50 text-left transition-colors">
-                    <span className="text-xs text-[#2d2d2d] font-light tracking-wide truncate">{p.name}</span>
-                    <span className="text-xs text-brand-500 ml-2 flex-shrink-0">NT$ {Number(p.price).toLocaleString()}</span>
+                    className="w-full flex items-center justify-between px-4 py-4 hover:bg-brand-50 text-left transition-colors">
+                    <span className="text-base text-[#2d2d2d] font-normal tracking-wide truncate">{p.name}</span>
+                    <span className="text-sm text-brand-500 ml-2 flex-shrink-0">NT$ {Number(p.price).toLocaleString()}</span>
                   </button>
                 ))}
               </div>
