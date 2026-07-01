@@ -32,13 +32,13 @@ function QRCodeImage({ value }) {
   return <img src={dataUrl} alt={`QR ${value}`} className="w-20 h-20" />
 }
 
-function ProductCard({ product, onDelete }) {
+function ProductCard({ product, onDelete, isQuickSelect, onToggleQuickSelect }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const barcodeValue = product.barcode || product.id
   const hasImage = product.image && (product.image.startsWith('http://') || product.image.startsWith('https://') || product.image.startsWith('/'))
 
   return (
-    <div className="bg-white border border-neutral-500/20 shadow-sm hover:shadow-md transition-all duration-500 flex flex-col">
+    <div className={`bg-white border shadow-sm hover:shadow-md transition-all duration-500 flex flex-col ${isQuickSelect ? 'border-brand-400' : 'border-neutral-500/20'}`}>
       {hasImage ? (
         <img src={product.image} alt={product.name}
           className="w-full h-36 object-cover bg-neutral-100"
@@ -58,12 +58,21 @@ function ProductCard({ product, onDelete }) {
             <p className="text-brand-600 font-light text-base mt-0.5">NT$ {Number(product.price).toLocaleString()}</p>
           </div>
           {!showConfirm ? (
-            <button onClick={() => setShowConfirm(true)}
-              className="p-1 text-neutral-400 hover:text-red-400 transition-colors flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={() => onToggleQuickSelect(product.id)}
+                title={isQuickSelect ? '取消快選' : '設為快選商品'}
+                className={`p-1 transition-colors ${isQuickSelect ? 'text-brand-500 hover:text-brand-600' : 'text-neutral-300 hover:text-brand-400'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill={isQuickSelect ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                </svg>
+              </button>
+              <button onClick={() => setShowConfirm(true)}
+                className="p-1 text-neutral-400 hover:text-red-400 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           ) : (
             <div className="flex gap-1 flex-shrink-0">
               <button onClick={() => { onDelete(product.id); setShowConfirm(false) }}
@@ -93,6 +102,7 @@ function ProductCard({ product, onDelete }) {
 
 export default function ProductManagement() {
   const [products, setProducts] = useState([])
+  const [quickSelectIds, setQuickSelectIds] = useState([])
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [loading, setLoading] = useState(true)
@@ -112,7 +122,15 @@ export default function ProductManagement() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadProducts() }, [loadProducts])
+  useEffect(() => {
+    loadProducts()
+    window.api.quickSelect.getAll().then(setQuickSelectIds).catch(() => {})
+  }, [loadProducts])
+
+  const toggleQuickSelect = async (id) => {
+    const updated = await window.api.quickSelect.toggle(id)
+    setQuickSelectIds(updated)
+  }
 
   const showSuccess = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(''), 3000) }
   const showError = (msg) => { setError(msg); setTimeout(() => setError(''), 3000) }
@@ -215,7 +233,13 @@ export default function ProductManagement() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {products.map(product => (
-            <ProductCard key={product.id} product={product} onDelete={handleDelete} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              onDelete={handleDelete}
+              isQuickSelect={quickSelectIds.includes(product.id)}
+              onToggleQuickSelect={toggleQuickSelect}
+            />
           ))}
         </div>
       )}

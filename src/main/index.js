@@ -13,6 +13,7 @@ const getDataDir = () => {
 
 const getProductsFile = () => join(getDataDir(), 'products.json')
 const getTransactionsFile = () => join(getDataDir(), 'transactions.json')
+const getQuickSelectFile = () => join(getDataDir(), 'quickSelect.json')
 
 const readJsonFile = (filePath) => {
   if (!existsSync(filePath)) {
@@ -103,6 +104,17 @@ ipcMain.handle('transactions:restore', (_, id) => {
   const updated = transactions.map(tx => tx.id === id ? { ...tx, cancelled: false } : tx)
   writeJsonFile(getTransactionsFile(), updated)
   return true
+})
+
+ipcMain.handle('quickSelect:getAll', () => {
+  return readJsonFile(getQuickSelectFile())
+})
+
+ipcMain.handle('quickSelect:toggle', (_, id) => {
+  const ids = readJsonFile(getQuickSelectFile())
+  const updated = ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]
+  writeJsonFile(getQuickSelectFile(), updated)
+  return updated
 })
 
 ipcMain.handle('app:getDataPath', () => {

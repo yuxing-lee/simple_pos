@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('api', {
     cancel: (id) => ipcRenderer.invoke('transactions:cancel', id),
     restore: (id) => ipcRenderer.invoke('transactions:restore', id)
   },
+  quickSelect: {
+    getAll: () => ipcRenderer.invoke('quickSelect:getAll'),
+    toggle: (id) => ipcRenderer.invoke('quickSelect:toggle', id)
+  },
   app: {
     getDataPath: () => ipcRenderer.invoke('app:getDataPath')
   }
