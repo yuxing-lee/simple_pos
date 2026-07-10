@@ -119,7 +119,6 @@ export default function Reports() {
 
   const activeTx = filteredTransactions.filter(tx => !tx.cancelled)
   const totalRevenue = activeTx.reduce((sum, tx) => sum + tx.total, 0)
-  const totalWrappedCash = activeTx.reduce((sum, tx) => sum + (tx.wrappedCash || 0), 0)
   const totalItems = activeTx.reduce((sum, tx) => sum + tx.items.reduce((s, i) => s + i.quantity, 0), 0)
 
   const handleCancel = async (id) => {
@@ -309,9 +308,7 @@ export default function Reports() {
           {
             label: '總營業額',
             value: `NT$ ${totalRevenue.toLocaleString()}`,
-            unit: totalWrappedCash > 0
-              ? `元（不含已取消，花束包現金 NT$ ${totalWrappedCash.toLocaleString()} 不計入）`
-              : '元（不含已取消）',
+            unit: '元（不含已取消）',
           },
           {
             label: '銷售商品數',
@@ -601,11 +598,6 @@ export default function Reports() {
                         ) : tx.change != null && tx.change > 0 ? (
                           <div className="text-brand-500">找零：NT$ {Number(tx.change).toLocaleString()}</div>
                         ) : null}
-                        {tx.wrappedCash > 0 && (
-                          <div className="text-neutral-400 tracking-wide">
-                            花束包現金：NT$ {Number(tx.wrappedCash).toLocaleString()}（不計入營業額）
-                          </div>
-                        )}
                       </div>
                       <p className="text-xs text-neutral-400 tracking-wide flex-shrink-0 ml-4">{formatDateTime(tx.date)}</p>
                     </div>
