@@ -7,8 +7,6 @@ import {
   calcCartDiscount,
   calcTotalPaid,
   calcRemaining,
-  calcCashDue,
-  calcCashChange,
   validatePayment,
 } from '../utils/paymentLogic'
 import {
@@ -36,7 +34,6 @@ export default function Checkout() {
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty] = useState('1')
   const [payments, setPayments] = useState({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
-  const [cashReceived, setCashReceived] = useState('')
   const [wrappedCash, setWrappedCash] = useState('')
 
   const barcodeRef = useRef(null)
@@ -147,10 +144,6 @@ export default function Checkout() {
   const wrappedCashAmt = Math.max(0, Math.round(parseFloat(wrappedCash) || 0))
   const effectiveTotal = total + wrappedCashAmt
   const remaining = calcRemaining(effectiveTotal, totalPaid)
-  const cashAmount = parseFloat(payments['現金']) || 0
-  const cashReceivedAmt = parseFloat(cashReceived) || 0
-  const cashDue = calcCashDue(remaining, cashAmount)
-  const cashChange = calcCashChange(cashAmount, cashReceivedAmt, cashDue, cashReceived)
 
   const handleMethodFill = (method) => {
     const othersTotal = PAYMENT_METHODS
@@ -161,7 +154,7 @@ export default function Checkout() {
   }
 
   const handleCheckout = () => {
-    const err = validatePayment({ cart, remaining, cashAmount, cashReceivedAmt, cashReceived, cashDue })
+    const err = validatePayment({ cart, remaining })
     if (err) { showError(err); return }
     confirmCheckout()
   }
@@ -175,20 +168,15 @@ export default function Checkout() {
       const paymentMethodLabel = activePayments.length === 0 ? '未指定'
         : activePayments.length === 1 ? activePayments[0].method
         : activePayments.map(p => p.method).join(' + ')
-      const cashRecv = cashAmount > 0 && cashReceived !== '' ? cashReceivedAmt : undefined
-      const cashChg = cashRecv != null ? Math.round(cashRecv - cashDue)
-        : cashAmount > cashDue ? Math.round(cashAmount - cashDue) : undefined
       const transaction = {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
-        cashReceived: cashRecv, cashChange: cashChg,
         ...(wrappedCashAmt > 0 && { wrappedCash: wrappedCashAmt }),
       }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
       setPayments({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
-      setCashReceived('')
       setWrappedCash('')
       setCheckoutSuccess(true)
       setTimeout(() => setCheckoutSuccess(false), 5000)
@@ -225,7 +213,6 @@ export default function Checkout() {
             </div>
             <p className="text-xs text-brand-500 tracking-wide">
               NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}
-              {lastTransaction.cashChange != null && lastTransaction.cashChange > 0 && <span className="ml-1">· 找零 NT$ {lastTransaction.cashChange.toLocaleString()}</span>}
               {lastTransaction.wrappedCash > 0 && <span className="ml-1">· 花束包現金 NT$ {lastTransaction.wrappedCash.toLocaleString()}</span>}
             </p>
           </div>
@@ -456,7 +443,7 @@ export default function Checkout() {
       </div>
 
       {/* Right: summary + quick select */}
-      <div className="w-64 flex-shrink-0 flex flex-col gap-4">
+      <div className="w-80 flex-shrink-0 flex flex-col gap-4 min-h-0">
         {/* Summary */}
         <div className="bg-white border border-neutral-500/20 shadow-sm p-5">
           <p className="text-xs tracking-widest uppercase text-neutral-400 mb-4">結帳摘要</p>
@@ -561,34 +548,12 @@ export default function Checkout() {
               <><span className="text-neutral-500">超付</span><span className="text-orange-500">NT$ {Math.round(Math.abs(remaining)).toLocaleString()}</span></>
             )}
           </div>
-
-          {cashAmount > 0 && (
-            <div className="mt-3 pt-3 border-t border-neutral-500/10">
-              <label className="block text-xs text-neutral-400 tracking-wider mb-1.5">客付現金 (NT$)</label>
-              <input
-                type="number"
-                value={cashReceived}
-                onChange={e => setCashReceived(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCheckout()}
-                placeholder={String(Math.round(cashDue))}
-                min="0"
-                step="1"
-                className="w-full border border-neutral-300 px-3 py-2 text-sm font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-              {(cashReceived !== '' || cashChange != null) && (
-                <div className={`mt-2 flex justify-between text-xs tracking-wide ${cashChange != null && cashChange < 0 ? 'text-red-500' : 'text-brand-600'}`}>
-                  <span>{cashChange != null && cashChange < 0 ? '現金不足' : '找零'}</span>
-                  <span>NT$ {cashChange != null ? Math.abs(cashChange).toLocaleString() : '0'}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Checkout button */}
         <button
           onClick={handleCheckout}
-          disabled={cart.length === 0 || isCheckingOut || Math.round(remaining) > 0 || (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashDue)}
+          disabled={cart.length === 0 || isCheckingOut || Math.round(remaining) > 0}
           className="w-full py-4 bg-brand-600 text-white text-xs tracking-widest uppercase font-light hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 shadow-sm"
         >
           {isCheckingOut ? (
@@ -604,20 +569,20 @@ export default function Checkout() {
         </button>
 
         {/* Quick select */}
-        <div className="bg-white border border-neutral-500/20 shadow-sm flex-1 overflow-hidden flex flex-col">
+        <div className="bg-white border border-neutral-500/20 shadow-sm flex-1 min-h-0 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-neutral-500/10">
-            <p className="text-xs tracking-widest uppercase text-neutral-400">商品快選</p>
+            <p className="text-sm tracking-widest uppercase text-neutral-400">商品快選</p>
           </div>
           <div className="overflow-y-auto flex-1 p-2">
             {quickSelectProducts.length === 0 ? (
-              <p className="text-xs text-neutral-300 text-center py-4 tracking-wider px-2">尚無快選商品，請至商品管理設定</p>
+              <p className="text-sm text-neutral-300 text-center py-4 tracking-wider px-2">尚無快選商品，請至商品管理設定</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {quickSelectProducts.map(p => (
                   <button key={p.id} onClick={() => addToCart(p)}
-                    className="w-full flex items-center justify-between px-4 py-4 hover:bg-brand-50 text-left transition-colors">
-                    <span className="text-base text-[#2d2d2d] font-normal tracking-wide truncate">{p.name}</span>
-                    <span className="text-sm text-brand-500 ml-2 flex-shrink-0">NT$ {Number(p.price).toLocaleString()}</span>
+                    className="w-full flex items-center justify-between px-5 py-6 hover:bg-brand-50 text-left transition-colors">
+                    <span className="text-xl text-[#2d2d2d] font-normal tracking-wide truncate">{p.name}</span>
+                    <span className="text-lg text-brand-500 ml-2 flex-shrink-0">NT$ {Number(p.price).toLocaleString()}</span>
                   </button>
                 ))}
               </div>

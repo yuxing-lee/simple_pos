@@ -24,30 +24,10 @@ export const calcTotalPaid = (payments) =>
 export const calcRemaining = (total, totalPaid) => total - totalPaid
 
 /**
- * 現金實際應付金額：總額扣除非現金付款，最少為 0
- * cashDue = max(0, total − nonCashTotal) = max(0, remaining + cashAmount)
- */
-export const calcCashDue = (remaining, cashAmount) =>
-  Math.max(0, remaining + cashAmount)
-
-/**
- * 應找零金額（null 表示不需找零）
- * - 若已填入「客付現金」：cashReceivedAmt − cashDue
- * - 若未填入但現金超付：Math.round(cashAmount − cashDue)
- * - 其他情況：null
- */
-export const calcCashChange = (cashAmount, cashReceivedAmt, cashDue, cashReceived) => {
-  if (cashAmount <= 0) return null
-  if (cashReceived !== '') return Math.round(cashReceivedAmt - cashDue)
-  return cashAmount > cashDue ? Math.round(cashAmount - cashDue) : null
-}
-
-/**
  * 結帳前驗證，回傳錯誤訊息字串；無誤回傳 null
  */
-export const validatePayment = ({ cart, remaining, cashAmount, cashReceivedAmt, cashReceived, cashDue }) => {
+export const validatePayment = ({ cart, remaining }) => {
   if (cart.length === 0) return '購物車是空的，請先加入商品'
   if (Math.round(remaining) > 0) return '付款金額合計未達應付總額'
-  if (cashAmount > 0 && cashReceived !== '' && cashReceivedAmt < cashDue) return '現金收款金額不足'
   return null
 }
