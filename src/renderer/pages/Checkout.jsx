@@ -443,7 +443,7 @@ export default function Checkout() {
       </div>
 
       {/* Right: summary + quick select */}
-      <div className="w-80 flex-shrink-0 flex flex-col gap-4">
+      <div className="w-80 flex-shrink-0 flex flex-col gap-4 min-h-0">
         {/* Summary */}
         <div className="bg-white border border-neutral-500/20 shadow-sm p-5">
           <p className="text-xs tracking-widest uppercase text-neutral-400 mb-4">結帳摘要</p>
@@ -569,7 +569,7 @@ export default function Checkout() {
         </button>
 
         {/* Quick select */}
-        <div className="bg-white border border-neutral-500/20 shadow-sm flex-1 overflow-hidden flex flex-col">
+        <div className="bg-white border border-neutral-500/20 shadow-sm flex-1 min-h-0 overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-neutral-500/10">
             <p className="text-sm tracking-widest uppercase text-neutral-400">商品快選</p>
           </div>
