@@ -5,8 +5,6 @@ import {
   calcCartDiscount,
   calcTotalPaid,
   calcRemaining,
-  calcCashDue,
-  calcCashChange,
   validatePayment,
 } from './paymentLogic'
 
@@ -142,95 +140,6 @@ describe('calcRemaining', () => {
   })
 })
 
-// ─── calcCashDue ─────────────────────────────────────────────────────────────
-
-describe('calcCashDue', () => {
-  it('僅現金付款，精確付款', () => {
-    // total=100, cashAmount=100, remaining=0
-    expect(calcCashDue(0, 100)).toBe(100)
-  })
-
-  it('現金 + 其他方式分攤', () => {
-    // total=100, Linepay=20, 現金=80, remaining=0
-    expect(calcCashDue(0, 80)).toBe(80)
-  })
-
-  it('其他方式部分超付，現金實際應付減少', () => {
-    // total=100, Linepay=50, 現金=80, totalPaid=130, remaining=-30
-    expect(calcCashDue(-30, 80)).toBe(50) // max(0, -30+80)
-  })
-
-  it('非現金已全額支付，cashDue 為 0', () => {
-    // total=100, Linepay=150, 現金=50, remaining=-100
-    expect(calcCashDue(-100, 50)).toBe(0) // max(0, -100+50) = max(0,-50) = 0
-  })
-
-  it('現金超付（無其他方式）', () => {
-    // total=100, 現金=150, remaining=-50
-    expect(calcCashDue(-50, 150)).toBe(100) // max(0, -50+150)
-  })
-
-  it('截圖情境：多方式付款 + 現金大額超付', () => {
-    // total=3448, 現金=4000, Linepay=100, 街口=200, 銀行=200
-    // totalPaid=4500, remaining=-1052
-    expect(calcCashDue(-1052, 4000)).toBe(2948) // max(0, -1052+4000)
-  })
-})
-
-// ─── calcCashChange ──────────────────────────────────────────────────────────
-
-describe('calcCashChange', () => {
-  it('cashAmount 為 0，回傳 null', () => {
-    expect(calcCashChange(0, 0, 0, '')).toBeNull()
-  })
-
-  it('精確付款且未填客付現金，回傳 null（不需找零）', () => {
-    // cashAmount=100, cashDue=100
-    expect(calcCashChange(100, 0, 100, '')).toBeNull()
-  })
-
-  it('現金超付（未填客付現金）', () => {
-    // total=100, 現金=150, cashDue=100
-    expect(calcCashChange(150, 0, 100, '')).toBe(50)
-  })
-
-  it('現金超付，浮點數邊界：remaining=-0.5 應回傳 1 而非 0', () => {
-    // total=4.5, 現金=5, cashDue=4.5, cashAmount=5 > cashDue=4.5
-    // Math.round(5 - 4.5) = Math.round(0.5) = 1
-    expect(calcCashChange(5, 0, 4.5, '')).toBe(1)
-  })
-
-  it('已填客付現金，找零含浮點數時應四捨五入', () => {
-    // cashDue 因浮點加購費而帶小數：1000 - 649.5 = 350.5 → 應 round 為 351
-    expect(calcCashChange(649.5, 1000, 649.5, '1000')).toBe(351)
-  })
-
-  it('已填客付現金，精確給付', () => {
-    expect(calcCashChange(100, 100, 100, '100')).toBe(0)
-  })
-
-  it('已填客付現金，給大鈔', () => {
-    // 現金=100, 客付=500, cashDue=100
-    expect(calcCashChange(100, 500, 100, '500')).toBe(400)
-  })
-
-  it('已填客付現金且不足（負數）', () => {
-    // 客付 80 < cashDue 100
-    expect(calcCashChange(100, 80, 100, '80')).toBe(-20)
-  })
-
-  it('截圖情境：多方式付款 + 客付現金 5000', () => {
-    // cashAmount=4000, cashReceivedAmt=5000, cashDue=2948
-    expect(calcCashChange(4000, 5000, 2948, '5000')).toBe(2052)
-  })
-
-  it('非現金完全覆蓋，客付現金全額退還', () => {
-    // total=100, Linepay=150, 現金=50, cashDue=0
-    // 客付現金=50
-    expect(calcCashChange(50, 50, 0, '50')).toBe(50)
-  })
-})
-
 // ─── validatePayment ─────────────────────────────────────────────────────────
 
 describe('validatePayment', () => {
@@ -238,10 +147,6 @@ describe('validatePayment', () => {
   const base = {
     cart: [mockItem],
     remaining: 0,
-    cashAmount: 100,
-    cashReceivedAmt: 0,
-    cashReceived: '',
-    cashDue: 100,
   }
 
   it('有效結帳（精確付款）回傳 null', () => {
@@ -259,31 +164,6 @@ describe('validatePayment', () => {
   })
 
   it('超付（remaining < 0）允許結帳', () => {
-    expect(validatePayment({ ...base, remaining: -50, cashDue: 100 })).toBeNull()
-  })
-
-  it('已填客付現金且不足', () => {
-    expect(validatePayment({
-      ...base,
-      cashReceived: '80',
-      cashReceivedAmt: 80,
-      cashDue: 100,
-    })).toBe('現金收款金額不足')
-  })
-
-  it('已填客付現金且充足（>= cashDue 但 < cashAmount）應允許結帳', () => {
-    // Bug 修正驗證：cashReceivedAmt=3500 >= cashDue=2948，但 < cashAmount=4000
-    expect(validatePayment({
-      cart: [mockItem],
-      remaining: -1052,
-      cashAmount: 4000,
-      cashReceivedAmt: 3500,
-      cashReceived: '3500',
-      cashDue: 2948,
-    })).toBeNull()
-  })
-
-  it('未填客付現金不觸發現金不足驗證', () => {
-    expect(validatePayment({ ...base, cashReceived: '', cashReceivedAmt: 0 })).toBeNull()
+    expect(validatePayment({ ...base, remaining: -50 })).toBeNull()
   })
 })
