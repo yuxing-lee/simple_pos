@@ -34,7 +34,6 @@ export default function Checkout() {
   const [customPrice, setCustomPrice] = useState('')
   const [customQty, setCustomQty] = useState('1')
   const [payments, setPayments] = useState({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
-  const [wrappedCash, setWrappedCash] = useState('')
 
   const barcodeRef = useRef(null)
   const barcodeBuffer = useRef('')
@@ -141,15 +140,13 @@ export default function Checkout() {
   const totalDiscount = calcCartDiscount(cart)
 
   const totalPaid = calcTotalPaid(payments)
-  const wrappedCashAmt = Math.max(0, Math.round(parseFloat(wrappedCash) || 0))
-  const effectiveTotal = total + wrappedCashAmt
-  const remaining = calcRemaining(effectiveTotal, totalPaid)
+  const remaining = calcRemaining(total, totalPaid)
 
   const handleMethodFill = (method) => {
     const othersTotal = PAYMENT_METHODS
       .filter(m => m !== method)
       .reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
-    const fillAmt = Math.max(0, effectiveTotal - othersTotal)
+    const fillAmt = Math.max(0, total - othersTotal)
     if (fillAmt > 0) setPayments(prev => ({ ...prev, [method]: String(fillAmt) }))
   }
 
@@ -171,13 +168,11 @@ export default function Checkout() {
       const transaction = {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
-        ...(wrappedCashAmt > 0 && { wrappedCash: wrappedCashAmt }),
       }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)
       setCart([])
       setPayments({ '現金': '', 'Linepay': '', '街口支付': '', '銀行轉帳': '' })
-      setWrappedCash('')
       setCheckoutSuccess(true)
       setTimeout(() => setCheckoutSuccess(false), 5000)
       barcodeRef.current?.focus()
@@ -213,7 +208,6 @@ export default function Checkout() {
             </div>
             <p className="text-xs text-brand-500 tracking-wide">
               NT$ {lastTransaction.total.toLocaleString()} · {lastTransaction.items.length} 種商品 · {lastTransaction.paymentMethod}
-              {lastTransaction.wrappedCash > 0 && <span className="ml-1">· 花束包現金 NT$ {lastTransaction.wrappedCash.toLocaleString()}</span>}
             </p>
           </div>
         )}
@@ -474,18 +468,6 @@ export default function Checkout() {
               <span className="text-xs tracking-widest uppercase text-neutral-400">商品金額</span>
               <span className="text-xl font-light text-brand-600">NT$ {total.toLocaleString()}</span>
             </div>
-            {wrappedCashAmt > 0 && (
-              <>
-                <div className="flex justify-between items-baseline text-xs">
-                  <span className="text-neutral-400 tracking-wide">花束包現金</span>
-                  <span className="text-neutral-500">NT$ {wrappedCashAmt.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-baseline border-t border-neutral-500/10 pt-2">
-                  <span className="text-xs tracking-widest uppercase text-neutral-400">客付合計</span>
-                  <span className="text-lg font-light text-[#2d2d2d]">NT$ {effectiveTotal.toLocaleString()}</span>
-                </div>
-              </>
-            )}
           </div>
         </div>
 
@@ -519,26 +501,6 @@ export default function Checkout() {
             ))}
           </div>
 
-          <div className="mt-3 pt-3 border-t border-neutral-500/10">
-            <label className="block text-xs text-neutral-400 tracking-wider mb-1.5">
-              花束包現金 (NT$)
-            </label>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-neutral-400 flex-shrink-0">NT$</span>
-              <input
-                type="number"
-                value={wrappedCash}
-                onChange={e => setWrappedCash(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCheckout()}
-                placeholder="0"
-                min="0"
-                step="1"
-                className="w-full border border-neutral-300 px-2 py-1.5 text-xs font-light focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-right"
-              />
-            </div>
-            <p className="text-xs text-neutral-300 tracking-wide mt-1">包入花束，不計入營業額</p>
-          </div>
-
           <div className="mt-3 pt-2 border-t border-neutral-500/10 flex justify-between items-center text-xs tracking-wide">
             {Math.abs(remaining) < 0.5 ? (
               <span className="text-brand-600">已付清</span>
@@ -570,19 +532,34 @@ export default function Checkout() {
 
         {/* Quick select */}
         <div className="bg-white border border-neutral-500/20 shadow-sm flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-neutral-500/10">
+          <div className="px-4 py-3 border-b border-neutral-500/10 flex items-center gap-1.5 flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
             <p className="text-sm tracking-widest uppercase text-neutral-400">商品快選</p>
           </div>
-          <div className="overflow-y-auto flex-1 p-2">
+          <div className="overflow-y-auto flex-1 p-3">
             {quickSelectProducts.length === 0 ? (
-              <p className="text-sm text-neutral-300 text-center py-4 tracking-wider px-2">尚無快選商品，請至商品管理設定</p>
+              <div className="flex flex-col items-center gap-2 text-neutral-300 py-8 px-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M7 7h.01M7 3h5.586a1 1 0 01.707.293l6.414 6.414a1 1 0 010 1.414l-8.586 8.586a1 1 0 01-1.414 0l-6.414-6.414A1 1 0 013 12.586V7a4 4 0 014-4z" />
+                </svg>
+                <p className="text-sm text-center tracking-wider">尚無快選商品，請至商品管理設定</p>
+              </div>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 {quickSelectProducts.map(p => (
-                  <button key={p.id} onClick={() => addToCart(p)}
-                    className="w-full flex items-center justify-between px-5 py-6 hover:bg-brand-50 text-left transition-colors">
-                    <span className="text-xl text-[#2d2d2d] font-normal tracking-wide truncate">{p.name}</span>
-                    <span className="text-lg text-brand-500 ml-2 flex-shrink-0">NT$ {Number(p.price).toLocaleString()}</span>
+                  <button
+                    key={p.id}
+                    onClick={() => addToCart(p)}
+                    className="group flex flex-col items-start gap-2 rounded-lg border border-neutral-500/15 bg-white px-3.5 py-4 text-left transition-all duration-150 hover:border-brand-300 hover:bg-brand-50 hover:shadow-sm active:scale-[0.96] active:bg-brand-100"
+                  >
+                    <span className="text-base font-medium text-[#2d2d2d] tracking-wide leading-snug line-clamp-2 min-h-[2.5rem]">
+                      {p.name}
+                    </span>
+                    <span className="inline-flex items-center rounded-full bg-brand-50 group-hover:bg-white px-2.5 py-1 text-xs font-medium text-brand-600 tracking-wide transition-colors">
+                      NT$ {Number(p.price).toLocaleString()}
+                    </span>
                   </button>
                 ))}
               </div>
