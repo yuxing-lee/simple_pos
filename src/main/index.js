@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { migrateOverpaidTransactions } from './migrateTransactions'
+import { applyCancel, applyRestore } from './transactionOps'
 
 // Data directory using userData path for persistence
 const getDataDir = () => {
@@ -89,20 +91,21 @@ ipcMain.handle('transactions:save', (_, transaction) => {
 })
 
 ipcMain.handle('transactions:getAll', () => {
-  return readJsonFile(getTransactionsFile())
+  const transactions = readJsonFile(getTransactionsFile())
+  const { migrated, changed } = migrateOverpaidTransactions(transactions)
+  if (changed) writeJsonFile(getTransactionsFile(), migrated)
+  return migrated
 })
 
 ipcMain.handle('transactions:cancel', (_, id) => {
   const transactions = readJsonFile(getTransactionsFile())
-  const updated = transactions.map(tx => tx.id === id ? { ...tx, cancelled: true } : tx)
-  writeJsonFile(getTransactionsFile(), updated)
+  writeJsonFile(getTransactionsFile(), applyCancel(transactions, id))
   return true
 })
 
 ipcMain.handle('transactions:restore', (_, id) => {
   const transactions = readJsonFile(getTransactionsFile())
-  const updated = transactions.map(tx => tx.id === id ? { ...tx, cancelled: false } : tx)
-  writeJsonFile(getTransactionsFile(), updated)
+  writeJsonFile(getTransactionsFile(), applyRestore(transactions, id))
   return true
 })
 
