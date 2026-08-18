@@ -50,3 +50,31 @@ export const cartSetDiscount = (cart, productId, val) => {
       : item
   )
 }
+
+export const cartRemoveItem = (cart, productId) =>
+  cart.filter(item => item.productId !== productId)
+
+/**
+ * 驗證並建立自訂商品的購物車項目；驗證失敗回傳 { error }，成功回傳 { item }。
+ */
+export const buildCustomItem = ({ name, price, qty, id }) => {
+  const trimmedName = (name || '').trim()
+  const roundedPrice = Math.round(parseFloat(price))
+  const parsedQty = parseInt(qty, 10)
+
+  if (!trimmedName) return { error: '請輸入商品名稱' }
+  if (isNaN(roundedPrice) || roundedPrice < 0) return { error: '請輸入有效的單價' }
+  if (isNaN(parsedQty) || parsedQty < 1) return { error: '數量至少為 1' }
+
+  return {
+    item: {
+      productId: id,
+      name: trimmedName,
+      price: roundedPrice,
+      quantity: parsedQty,
+      addonFee: 0,
+      discountCash: 0,
+      subtotal: calcSubtotal(roundedPrice, parsedQty),
+    },
+  }
+}

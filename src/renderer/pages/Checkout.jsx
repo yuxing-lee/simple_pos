@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../utils/supabase'
+import { cuid } from '../utils/cuid'
 import {
   PAYMENT_METHODS,
-  calcSubtotal,
   calcCartTotal,
   calcCartDiscount,
   calcTotalPaid,
   calcRemaining,
+  calcFillAmount,
   validatePayment,
   splitCashChange,
 } from '../utils/paymentLogic'
@@ -16,6 +17,8 @@ import {
   cartSetQuantity,
   cartSetAddonFee,
   cartSetDiscount,
+  cartRemoveItem,
+  buildCustomItem,
 } from '../utils/cartLogic'
 
 export default function Checkout() {
@@ -119,14 +122,9 @@ export default function Checkout() {
   const setCashDiscount = (productId, val) => setCart(prev => cartSetDiscount(prev, productId, val))
 
   const addCustomItem = () => {
-    const name = customName.trim()
-    const price = Math.round(parseFloat(customPrice))
-    const qty = parseInt(customQty, 10)
-    if (!name) { showError('請輸入商品名稱'); return }
-    if (isNaN(price) || price < 0) { showError('請輸入有效的單價'); return }
-    if (isNaN(qty) || qty < 1) { showError('數量至少為 1'); return }
-    const customId = 'custom_' + Date.now()
-    setCart(prev => [...prev, { productId: customId, name, price, quantity: qty, addonFee: 0, discountCash: 0, subtotal: calcSubtotal(price, qty) }])
+    const { item, error } = buildCustomItem({ name: customName, price: customPrice, qty: customQty, id: 'custom_' + cuid() })
+    if (error) { showError(error); return }
+    setCart(prev => [...prev, item])
     setCustomName('')
     setCustomPrice('')
     setCustomQty('1')
@@ -134,7 +132,7 @@ export default function Checkout() {
     barcodeRef.current?.focus()
   }
 
-  const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.productId !== productId))
+  const removeFromCart = (productId) => setCart(prev => cartRemoveItem(prev, productId))
   const quickSelectProducts = products.filter(p => quickSelectIds.includes(p.id))
   const total = calcCartTotal(cart)
   const totalAddon = cart.reduce((sum, item) => sum + (item.addonFee || 0), 0)
@@ -144,15 +142,12 @@ export default function Checkout() {
   const remaining = calcRemaining(total, totalPaid)
 
   const handleMethodFill = (method) => {
-    const othersTotal = PAYMENT_METHODS
-      .filter(m => m !== method)
-      .reduce((sum, m) => sum + (parseFloat(payments[m]) || 0), 0)
-    const fillAmt = Math.max(0, total - othersTotal)
+    const fillAmt = calcFillAmount(payments, total, method)
     if (fillAmt > 0) setPayments(prev => ({ ...prev, [method]: String(fillAmt) }))
   }
 
   const handleCheckout = () => {
-    const err = validatePayment({ cart, remaining })
+    const err = validatePayment({ cart, remaining, payments, total })
     if (err) { showError(err); return }
     confirmCheckout()
   }
@@ -168,7 +163,7 @@ export default function Checkout() {
         : activePayments.length === 1 ? activePayments[0].method
         : activePayments.map(p => p.method).join(' + ')
       const transaction = {
-        id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
+        id: cuid(), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
         ...(change > 0 ? { change } : {}),
       }

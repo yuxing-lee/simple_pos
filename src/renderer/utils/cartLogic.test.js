@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { cartAddItem, cartUpdateQuantity, cartSetQuantity, cartSetAddonFee, cartSetDiscount } from './cartLogic'
+import {
+  cartAddItem, cartUpdateQuantity, cartSetQuantity, cartSetAddonFee, cartSetDiscount,
+  cartRemoveItem, buildCustomItem,
+} from './cartLogic'
 
 const item = (overrides = {}) => ({
   productId: 'p1', name: '玫瑰花束', price: 200, quantity: 1, addonFee: 0, discountCash: 0, subtotal: 200,
@@ -249,5 +252,86 @@ describe('cartSetDiscount', () => {
     const result = cartSetDiscount(cart, 'p1', '30')
     // max(0, 200-30) + 50 = 220
     expect(result[0].subtotal).toBe(220)
+  })
+})
+
+// ─── cartRemoveItem ───────────────────────────────────────────────────────────
+
+describe('cartRemoveItem', () => {
+  it('移除指定商品', () => {
+    const cart = [item(), item({ productId: 'p2', name: '百合', price: 300, subtotal: 300 })]
+    const result = cartRemoveItem(cart, 'p1')
+    expect(result).toHaveLength(1)
+    expect(result[0].productId).toBe('p2')
+  })
+
+  it('移除不存在的 productId，購物車不變', () => {
+    const cart = [item()]
+    expect(cartRemoveItem(cart, 'not-exist')).toStrictEqual(cart)
+  })
+
+  it('空購物車移除不噴錯，回傳空陣列', () => {
+    expect(cartRemoveItem([], 'p1')).toEqual([])
+  })
+})
+
+// ─── buildCustomItem ──────────────────────────────────────────────────────────
+
+describe('buildCustomItem', () => {
+  it('正常輸入，成功建立項目', () => {
+    const { item, error } = buildCustomItem({ name: '花束包裝', price: '150', qty: '2', id: 'c1' })
+    expect(error).toBeUndefined()
+    expect(item).toEqual({
+      productId: 'c1', name: '花束包裝', price: 150, quantity: 2,
+      addonFee: 0, discountCash: 0, subtotal: 300,
+    })
+  })
+
+  it('名稱前後空白會被去除', () => {
+    const { item } = buildCustomItem({ name: '  花束包裝  ', price: '100', qty: '1', id: 'c1' })
+    expect(item.name).toBe('花束包裝')
+  })
+
+  it('名稱為空字串時回傳錯誤', () => {
+    const { error, item } = buildCustomItem({ name: '', price: '100', qty: '1', id: 'c1' })
+    expect(error).toBe('請輸入商品名稱')
+    expect(item).toBeUndefined()
+  })
+
+  it('名稱僅有空白時回傳錯誤', () => {
+    const { error } = buildCustomItem({ name: '   ', price: '100', qty: '1', id: 'c1' })
+    expect(error).toBe('請輸入商品名稱')
+  })
+
+  it('價格為負數時回傳錯誤', () => {
+    const { error } = buildCustomItem({ name: 'A', price: '-10', qty: '1', id: 'c1' })
+    expect(error).toBe('請輸入有效的單價')
+  })
+
+  it('價格為非數字時回傳錯誤', () => {
+    const { error } = buildCustomItem({ name: 'A', price: 'abc', qty: '1', id: 'c1' })
+    expect(error).toBe('請輸入有效的單價')
+  })
+
+  it('價格為小數時四捨五入', () => {
+    const { item } = buildCustomItem({ name: 'A', price: '99.6', qty: '1', id: 'c1' })
+    expect(item.price).toBe(100)
+  })
+
+  it('數量小於 1 時回傳錯誤', () => {
+    const { error } = buildCustomItem({ name: 'A', price: '100', qty: '0', id: 'c1' })
+    expect(error).toBe('數量至少為 1')
+  })
+
+  it('數量為非數字時回傳錯誤', () => {
+    const { error } = buildCustomItem({ name: 'A', price: '100', qty: 'abc', id: 'c1' })
+    expect(error).toBe('數量至少為 1')
+  })
+
+  it('價格為 0 時允許建立（贈品情境）', () => {
+    const { item, error } = buildCustomItem({ name: '贈品', price: '0', qty: '1', id: 'c1' })
+    expect(error).toBeUndefined()
+    expect(item.price).toBe(0)
+    expect(item.subtotal).toBe(0)
   })
 })

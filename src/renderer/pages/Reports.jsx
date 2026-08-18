@@ -3,24 +3,14 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
-
-function getDateRange(filter) {
-  const now = new Date()
-  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0)
-  const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999)
-  if (filter === 'today') return { start: startOfDay(now), end: endOfDay(now) }
-  if (filter === 'week') {
-    const day = now.getDay()
-    const diffToMon = day === 0 ? 6 : day - 1
-    const mon = new Date(now)
-    mon.setDate(now.getDate() - diffToMon)
-    return { start: startOfDay(mon), end: endOfDay(now) }
-  }
-  if (filter === 'month') {
-    return { start: startOfDay(new Date(now.getFullYear(), now.getMonth(), 1)), end: endOfDay(now) }
-  }
-  return null
-}
+import {
+  filterTransactionsByRange,
+  getActiveTransactions,
+  calcSummary,
+  aggregatePaymentData,
+  aggregateDailyData,
+  aggregateTopProducts,
+} from '../utils/reportLogic'
 
 function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -31,11 +21,6 @@ function formatDateTime(isoString) {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   })
-}
-
-const localDateKey = (d) => {
-  const date = typeof d === 'string' ? new Date(d) : d
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 const PAYMENT_COLORS = ['#8d5f4d', '#b79483', '#c9b3a3', '#d4c4b0', '#e3dbd3']
@@ -102,24 +87,9 @@ export default function Reports() {
 
   useEffect(() => { loadTransactions() }, [loadTransactions])
 
-  const filteredTransactions = transactions.filter(tx => {
-    const txDate = new Date(tx.date)
-    if (filter === 'custom') {
-      if (!customStart && !customEnd) return true
-      const start = customStart ? new Date(customStart + 'T00:00:00') : null
-      const end = customEnd ? new Date(customEnd + 'T23:59:59') : null
-      if (start && txDate < start) return false
-      if (end && txDate > end) return false
-      return true
-    }
-    const range = getDateRange(filter)
-    if (!range) return true
-    return txDate >= range.start && txDate <= range.end
-  })
-
-  const activeTx = filteredTransactions.filter(tx => !tx.cancelled)
-  const totalRevenue = activeTx.reduce((sum, tx) => sum + tx.total, 0)
-  const totalItems = activeTx.reduce((sum, tx) => sum + tx.items.reduce((s, i) => s + i.quantity, 0), 0)
+  const filteredTransactions = filterTransactionsByRange(transactions, { filter, customStart, customEnd })
+  const activeTx = getActiveTransactions(filteredTransactions)
+  const { totalRevenue, totalItems } = calcSummary(activeTx)
 
   const handleCancel = async (id) => {
     setProcessingId(id)
@@ -150,97 +120,11 @@ export default function Reports() {
 
   // --- Chart data ---
 
-  const paymentData = useMemo(() => {
-    const map = {}
-    activeTx.forEach(tx => {
-      if (Array.isArray(tx.payments) && tx.payments.length > 0) {
-        tx.payments.forEach(p => {
-          const method = p.method || '未指定'
-          if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
-          map[method].count++
-          map[method].amount += p.amount
-        })
-      } else {
-        const method = tx.paymentMethod || '未指定'
-        if (!map[method]) map[method] = { name: method, count: 0, amount: 0 }
-        map[method].count++
-        map[method].amount += tx.total
-      }
-    })
-    return Object.values(map).sort((a, b) => b.amount - a.amount)
-  }, [activeTx])
+  const paymentData = useMemo(() => aggregatePaymentData(activeTx), [activeTx])
 
-  const dailyData = useMemo(() => {
-    if (activeTx.length === 0) return []
+  const dailyData = useMemo(() => aggregateDailyData(activeTx, filter), [activeTx, filter])
 
-    if (filter === 'today') {
-      const hours = Array.from({ length: 24 }, (_, i) => ({
-        label: String(i).padStart(2, '0'), revenue: 0, count: 0
-      }))
-      activeTx.forEach(tx => {
-        const h = new Date(tx.date).getHours()
-        hours[h].revenue += tx.total
-        hours[h].count++
-      })
-      const nonZeroIdx = hours.reduce((acc, h, i) => h.revenue > 0 ? [...acc, i] : acc, [])
-      if (nonZeroIdx.length === 0) return []
-      return hours.slice(Math.max(0, nonZeroIdx[0] - 1), Math.min(23, nonZeroIdx[nonZeroIdx.length - 1] + 1) + 1)
-    }
-
-    if (filter === 'week') {
-      const now = new Date()
-      const diffToMon = now.getDay() === 0 ? 6 : now.getDay() - 1
-      const days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(now)
-        d.setDate(now.getDate() - diffToMon + i)
-        return { key: localDateKey(d), label: ['一', '二', '三', '四', '五', '六', '日'][i], revenue: 0, count: 0 }
-      })
-      activeTx.forEach(tx => {
-        const key = localDateKey(tx.date)
-        const day = days.find(d => d.key === key)
-        if (day) { day.revenue += tx.total; day.count++ }
-      })
-      return days
-    }
-
-    if (filter === 'month') {
-      const now = new Date()
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-      const days = Array.from({ length: daysInMonth }, (_, i) => {
-        const d = new Date(now.getFullYear(), now.getMonth(), i + 1)
-        return { key: localDateKey(d), label: String(i + 1), revenue: 0, count: 0 }
-      })
-      activeTx.forEach(tx => {
-        const key = localDateKey(tx.date)
-        const day = days.find(d => d.key === key)
-        if (day) { day.revenue += tx.total; day.count++ }
-      })
-      return days
-    }
-
-    // custom: only days with transactions, capped at 62 days
-    const map = {}
-    activeTx.forEach(tx => {
-      const key = localDateKey(tx.date)
-      if (!map[key]) map[key] = { key, label: key.slice(5).replace('-', '/'), revenue: 0, count: 0 }
-      map[key].revenue += tx.total
-      map[key].count++
-    })
-    const result = Object.values(map).sort((a, b) => a.key.localeCompare(b.key))
-    return result.length <= 62 ? result : []
-  }, [activeTx, filter])
-
-  const topProducts = useMemo(() => {
-    const map = {}
-    activeTx.forEach(tx => {
-      tx.items.forEach(item => {
-        if (!map[item.name]) map[item.name] = { name: item.name, quantity: 0, revenue: 0 }
-        map[item.name].quantity += item.quantity
-        map[item.name].revenue += item.subtotal
-      })
-    })
-    return Object.values(map).sort((a, b) => b.quantity - a.quantity).slice(0, 5)
-  }, [activeTx])
+  const topProducts = useMemo(() => aggregateTopProducts(activeTx), [activeTx])
 
   const showCharts = !loading && activeTx.length > 0
   const showTopProducts = filter !== 'today' && topProducts.length > 0
