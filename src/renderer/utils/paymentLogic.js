@@ -24,6 +24,29 @@ export const calcTotalPaid = (payments) =>
 export const calcRemaining = (total, totalPaid) => total - totalPaid
 
 /**
+ * 將超付金額從現金付款中扣除，回傳找零金額，確保 payments 加總等於訂單總額。
+ * 非現金付款方式（Linepay、街口支付、銀行轉帳等）視為實收金額，不產生找零。
+ */
+export const splitCashChange = (activePayments, total) => {
+  const nonCashTotal = activePayments
+    .filter(p => p.method !== '現金')
+    .reduce((sum, p) => sum + p.amount, 0)
+  const cashPayment = activePayments.find(p => p.method === '現金')
+
+  if (!cashPayment) return { payments: activePayments, change: 0 }
+
+  const requiredCash = Math.max(0, total - nonCashTotal)
+  const change = Math.max(0, cashPayment.amount - requiredCash)
+
+  if (change === 0) return { payments: activePayments, change: 0 }
+
+  const payments = activePayments.map(p =>
+    p.method === '現金' ? { ...p, amount: p.amount - change } : p
+  )
+  return { payments, change }
+}
+
+/**
  * 結帳前驗證，回傳錯誤訊息字串；無誤回傳 null
  */
 export const validatePayment = ({ cart, remaining }) => {

@@ -8,6 +8,7 @@ import {
   calcTotalPaid,
   calcRemaining,
   validatePayment,
+  splitCashChange,
 } from '../utils/paymentLogic'
 import {
   cartAddItem,
@@ -159,15 +160,17 @@ export default function Checkout() {
   const confirmCheckout = async () => {
     setIsCheckingOut(true)
     try {
-      const activePayments = PAYMENT_METHODS
+      const rawPayments = PAYMENT_METHODS
         .filter(m => (parseFloat(payments[m]) || 0) > 0)
         .map(m => ({ method: m, amount: parseFloat(payments[m]) }))
+      const { payments: activePayments, change } = splitCashChange(rawPayments, total)
       const paymentMethodLabel = activePayments.length === 0 ? '未指定'
         : activePayments.length === 1 ? activePayments[0].method
         : activePayments.map(p => p.method).join(' + ')
       const transaction = {
         id: String(Date.now()), date: new Date().toISOString(), items: cart, total,
         payments: activePayments, paymentMethod: paymentMethodLabel,
+        ...(change > 0 ? { change } : {}),
       }
       await window.api.transactions.save(transaction)
       setLastTransaction(transaction)

@@ -6,6 +6,7 @@ import {
   calcTotalPaid,
   calcRemaining,
   validatePayment,
+  splitCashChange,
 } from './paymentLogic'
 
 // ─── calcSubtotal ───────────────────────────────────────────────────────────
@@ -165,5 +166,53 @@ describe('validatePayment', () => {
 
   it('超付（remaining < 0）允許結帳', () => {
     expect(validatePayment({ ...base, remaining: -50 })).toBeNull()
+  })
+})
+
+// ─── splitCashChange ─────────────────────────────────────────────────────────
+
+describe('splitCashChange', () => {
+  it('精確付款時不產生找零，payments 不變', () => {
+    const payments = [{ method: '現金', amount: 140 }]
+    expect(splitCashChange(payments, 140)).toEqual({ payments, change: 0 })
+  })
+
+  it('現金超付時，從現金金額扣除找零，使總額對應訂單總額', () => {
+    const payments = [{ method: '現金', amount: 500 }]
+    const result = splitCashChange(payments, 140)
+    expect(result.change).toBe(360)
+    expect(result.payments).toEqual([{ method: '現金', amount: 140 }])
+  })
+
+  it('混合付款：非現金金額照實入帳，超付部分只從現金扣除', () => {
+    const payments = [
+      { method: 'Linepay', amount: 100 },
+      { method: '現金', amount: 100 },
+    ]
+    const result = splitCashChange(payments, 140)
+    expect(result.change).toBe(60)
+    expect(result.payments).toEqual([
+      { method: 'Linepay', amount: 100 },
+      { method: '現金', amount: 40 },
+    ])
+    expect(result.payments.reduce((s, p) => s + p.amount, 0)).toBe(140)
+  })
+
+  it('未使用現金付款時不產生找零', () => {
+    const payments = [{ method: 'Linepay', amount: 140 }]
+    expect(splitCashChange(payments, 140)).toEqual({ payments, change: 0 })
+  })
+
+  it('未付足（無超付）時不產生找零', () => {
+    const payments = [{ method: '現金', amount: 60 }]
+    expect(splitCashChange(payments, 140)).toEqual({ payments, change: 0 })
+  })
+
+  it('現金 + 非現金合計未超過總額時不產生找零', () => {
+    const payments = [
+      { method: 'Linepay', amount: 100 },
+      { method: '現金', amount: 40 },
+    ]
+    expect(splitCashChange(payments, 140)).toEqual({ payments, change: 0 })
   })
 })
