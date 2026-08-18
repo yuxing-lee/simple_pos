@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { migrateOverpaidTransactions } from './migrateTransactions'
 
 // Data directory using userData path for persistence
 const getDataDir = () => {
@@ -89,7 +90,10 @@ ipcMain.handle('transactions:save', (_, transaction) => {
 })
 
 ipcMain.handle('transactions:getAll', () => {
-  return readJsonFile(getTransactionsFile())
+  const transactions = readJsonFile(getTransactionsFile())
+  const { migrated, changed } = migrateOverpaidTransactions(transactions)
+  if (changed) writeJsonFile(getTransactionsFile(), migrated)
+  return migrated
 })
 
 ipcMain.handle('transactions:cancel', (_, id) => {
